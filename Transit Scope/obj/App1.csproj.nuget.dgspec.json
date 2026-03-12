@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\123\\RiderProjects\\App1\\App1\\App1.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\123\\RiderProjects\\App1\\App1\\App1.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\123\\RiderProjects\\App1\\App1\\App1.csproj",
+        "projectName": "App1",
+        "projectPath": "C:\\Users\\123\\RiderProjects\\App1\\App1\\App1.csproj",
+        "packagesPath": "C:\\Users\\123\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\123\\RiderProjects\\App1\\App1\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\123\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "targetAlias": "net48",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.319\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

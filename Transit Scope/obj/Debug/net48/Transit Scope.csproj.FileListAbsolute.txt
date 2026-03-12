@@ -1,0 +1,9 @@
+C:\Users\123\RiderProjects\App1\Transit Scope\bin\Debug\net48\Transit Scope.dll
+C:\Users\123\RiderProjects\App1\Transit Scope\bin\Debug\net48\Transit Scope.pdb
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.csproj.AssemblyReference.cache
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.AssemblyInfoInputs.cache
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.AssemblyInfo.cs
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.csproj.CoreCompileInputs.cache
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.dll
+C:\Users\123\RiderProjects\App1\Transit Scope\obj\Debug\net48\Transit Scope.pdb

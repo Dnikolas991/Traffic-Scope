@@ -1,0 +1,9 @@
+C:\Users\123\RiderProjects\App1\App1\bin\Debug\net48\App1.dll
+C:\Users\123\RiderProjects\App1\App1\bin\Debug\net48\App1.pdb
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.csproj.AssemblyReference.cache
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.AssemblyInfoInputs.cache
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.AssemblyInfo.cs
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.csproj.CoreCompileInputs.cache
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.dll
+C:\Users\123\RiderProjects\App1\App1\obj\Debug\net48\App1.pdb
