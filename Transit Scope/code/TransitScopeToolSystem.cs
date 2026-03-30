@@ -11,7 +11,11 @@ namespace Transit_Scope.code
 {
     public partial class TransitScopeToolSystem : ToolBaseSystem
     {
-        // 工具状态
+        /// <summary>
+        /// 工具状态：
+        /// Default        - 未运行
+        /// SelectingRoad  - 已进入道路选择模式
+        /// </summary>
         public enum State
         {
             Default,
@@ -21,16 +25,53 @@ namespace Transit_Scope.code
         private ToolSystem m_ToolSystem;
         private State m_State = State.Default;
 
-        // 鼠标当前悬停到的道路
+        /// <summary>
+        /// 鼠标当前悬停到的道路
+        /// </summary>
         public Entity HoveredEdge { get; private set; } = Entity.Null;
 
-        // 用户最后一次确认选择的道路
+        /// <summary>
+        /// 当前已锁定的道路
+        /// </summary>
         public Entity SelectedEdge { get; private set; } = Entity.Null;
 
-        // 当前帧是否刚产生一次新的选择
+        /// <summary>
+        /// 当前帧是否产生了新的“确认选择事件”
+        /// TransitScopeSystem 只消费这个事件，不参与工具状态机
+        /// </summary>
         public bool HasNewSelection { get; private set; }
 
         public bool IsSelecting => m_State == State.SelectingRoad;
+        public bool HasLockedSelection => SelectedEdge != Entity.Null;
+
+        public int HoveredEdgeId => HoveredEdge != Entity.Null ? HoveredEdge.Index : -1;
+        public int SelectedEdgeId => SelectedEdge != Entity.Null ? SelectedEdge.Index : -1;
+
+        /// <summary>
+        /// 给 UI 用的状态文字
+        /// </summary>
+        public string StatusText
+        {
+            get
+            {
+                if (!IsSelecting)
+                {
+                    return "未激活";
+                }
+
+                if (SelectedEdge != Entity.Null)
+                {
+                    return $"已锁定道路 #{SelectedEdge.Index}";
+                }
+
+                if (HoveredEdge != Entity.Null)
+                {
+                    return $"悬停道路 #{HoveredEdge.Index}";
+                }
+
+                return "请将鼠标移动到道路上";
+            }
+        }
 
         public override string toolID => "TransitScopeTool";
 
@@ -40,11 +81,8 @@ namespace Transit_Scope.code
 
             m_ToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
 
-            // 参考官方/成熟工具做法：
-            // 工具默认不主动运行，只有被切成 activeTool 时才进入运行态
+            // 工具默认关闭，只在 activeTool 切换到自己时运行
             Enabled = false;
-
-            Logger.Info("TransitScopeToolSystem 初始化完成");
         }
 
         protected override void OnStartRunning()
@@ -56,7 +94,8 @@ namespace Transit_Scope.code
             SelectedEdge = Entity.Null;
             HasNewSelection = false;
 
-            Logger.Info("TransitScopeTool 已进入道路选择模式");
+            RefreshVisualSelection();
+            Logger.Info("TransitScopeTool 已开启");
         }
 
         protected override void OnStopRunning()
@@ -65,9 +104,11 @@ namespace Transit_Scope.code
 
             m_State = State.Default;
             HoveredEdge = Entity.Null;
+            SelectedEdge = Entity.Null;
             HasNewSelection = false;
 
-            Logger.Info("TransitScopeTool 已退出道路选择模式");
+            RefreshVisualSelection();
+            Logger.Info("TransitScopeTool 已关闭");
         }
 
         public override PrefabBase GetPrefab()
@@ -81,14 +122,12 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 由 UI 打开工具。
-        /// 这里只负责切 activeTool，不在这里做选择逻辑。
+        /// 由 UI 调用，激活工具
         /// </summary>
         public void EnableSelectionMode()
         {
             if (m_ToolSystem == null)
             {
-                Logger.Error("EnableSelectionMode 失败：ToolSystem 未初始化");
                 return;
             }
 
@@ -96,32 +135,28 @@ namespace Transit_Scope.code
             SelectedEdge = Entity.Null;
             HasNewSelection = false;
 
-            Logger.Info($"[Before Enable] activeTool = {m_ToolSystem.activeTool?.GetType().Name ?? "null"}");
-
             if (m_ToolSystem.activeTool != this)
             {
                 m_ToolSystem.selected = Entity.Null;
                 m_ToolSystem.activeTool = this;
             }
 
-            Logger.Info($"[After Enable] activeTool = {m_ToolSystem.activeTool?.GetType().Name ?? "null"}");
+            RefreshVisualSelection();
         }
 
         /// <summary>
-        /// 由 UI 关闭工具。
+        /// 由 UI 调用，退出工具
         /// </summary>
         public void DisableSelectionMode()
         {
             if (m_ToolSystem == null)
             {
-                Logger.Error("DisableSelectionMode 失败：ToolSystem 未初始化");
                 return;
             }
 
             HoveredEdge = Entity.Null;
+            SelectedEdge = Entity.Null;
             HasNewSelection = false;
-
-            Logger.Info($"[Before Disable] activeTool = {m_ToolSystem.activeTool?.GetType().Name ?? "null"}");
 
             if (m_ToolSystem.activeTool == this)
             {
@@ -129,49 +164,63 @@ namespace Transit_Scope.code
                 m_ToolSystem.activeTool = m_DefaultToolSystem;
             }
 
-            Logger.Info($"[After Disable] activeTool = {m_ToolSystem.activeTool?.GetType().Name ?? "null"}");
+            RefreshVisualSelection();
         }
 
         /// <summary>
-        /// 确认当前悬停道路。
-        /// 这个方法既可以被 UI 调试按钮调用，也可以被工具内部的左键点击调用。
+        /// 对外保留的“确认当前悬停道路”入口。
+        /// UI confirm 和场景左键都走这里。
+        /// 
+        /// 逻辑：
+        /// 1. 没悬停到道路 -> 不处理
+        /// 2. 点到当前已锁定道路 -> 取消锁定
+        /// 3. 点到另一条道路 -> 锁定新道路，并触发一次新选择事件
         /// </summary>
         public void ConfirmHoveredRoad()
         {
-            if (HoveredEdge == Entity.Null)
+            if (!IsValidEdge(HoveredEdge))
             {
-                Logger.Info("ConfirmHoveredRoad：当前没有悬停道路");
                 return;
             }
 
-            if (!EntityManager.Exists(HoveredEdge))
+            // 再次点击同一条已锁定道路：取消选择
+            if (SelectedEdge != Entity.Null && SelectedEdge == HoveredEdge)
             {
-                Logger.Info("ConfirmHoveredRoad：HoveredEdge 已不存在");
+                ClearSelectionInternal(emitSelectionEvent: false);
+                Logger.Info("已取消道路锁定");
                 return;
             }
 
-            if (!EntityManager.HasComponent<Edge>(HoveredEdge))
-            {
-                Logger.Info("ConfirmHoveredRoad：HoveredEdge 不是 Edge");
-                return;
-            }
-
+            // 锁定当前悬停道路
             SelectedEdge = HoveredEdge;
             HasNewSelection = true;
 
-            Logger.Info($"确认选择道路 Edge: {SelectedEdge.Index}");
+            RefreshVisualSelection();
+            Logger.Info($"已锁定道路 #{SelectedEdge.Index}");
         }
 
+        /// <summary>
+        /// 主系统消费完“新选择事件”后调用
+        /// </summary>
         public void ClearNewSelectionFlag()
         {
             HasNewSelection = false;
+        }
+
+        /// <summary>
+        /// 手动取消当前锁定
+        /// 这里给 UI 或以后快捷键扩展预留
+        /// </summary>
+        public void ClearSelection()
+        {
+            ClearSelectionInternal(emitSelectionEvent: false);
         }
 
         public override void InitializeRaycast()
         {
             base.InitializeRaycast();
 
-            // 当前阶段只做“道路选择”，因此先保持最小可用的 Net 射线配置
+            // 当前工具只做道路 Edge 选择，保持最小可用配置
             m_ToolRaycastSystem.collisionMask = CollisionMask.OnGround | CollisionMask.Overground | CollisionMask.Underground;
             m_ToolRaycastSystem.typeMask = TypeMask.Net;
             m_ToolRaycastSystem.raycastFlags = RaycastFlags.SubElements | RaycastFlags.Cargo | RaycastFlags.Passenger | RaycastFlags.EditorContainers;
@@ -192,26 +241,19 @@ namespace Transit_Scope.code
                 return inputDeps;
             }
 
-            // 每帧先清空“本帧新选择”标记。
-            // 真正确认时会在 ConfirmHoveredRoad() 里重新置为 true。
+            // 每帧先清空一次“新选择事件”
+            // 真正确认选择时会重新置 true
             HasNewSelection = false;
 
-            Entity oldHovered = HoveredEdge;
             HoveredEdge = TryGetHoveredRoadEdge();
 
-            if (oldHovered != HoveredEdge)
-            {
-                Logger.Info($"HoveredEdge changed: {oldHovered.Index} -> {HoveredEdge.Index}");
-            }
+            // 刷新当前视觉选择：
+            // 未锁定时 -> 高亮悬停道路
+            // 已锁定时 -> 高亮已锁定道路
+            RefreshVisualSelection();
 
-            // 关键修复点：
-            // 这里把“游戏场景里的左键点击”接回工具内部，
-            // 不再只依赖 UI 的 confirm 按钮。
-            //
-            // 当前项目里没有看到 ModSettings/ApplyTool 的现成定义，
-            // 所以先用 Unity InputSystem 做一层最小桥接。
-            // 等后面你把项目自己的键位系统补齐，再替换成 ProxyAction 即可。
-            if (CanAcceptSceneClick() && IsPrimaryMousePressedThisFrame())
+            // 左键点击场景时确认/切换/取消
+            if (CanAcceptSceneClick() && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 ConfirmHoveredRoad();
             }
@@ -220,8 +262,7 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 判断当前这一帧是否允许接受场景点击。
-        /// 如果 UI 正在占用射线，或者工具当前不在选择状态，就不要处理点击。
+        /// 当前这一帧是否允许处理场景点击
         /// </summary>
         private bool CanAcceptSceneClick()
         {
@@ -230,8 +271,6 @@ namespace Transit_Scope.code
                 return false;
             }
 
-            // 参考成熟工具的判断方式：
-            // 当 raycast 被 UI 或 debug 禁掉时，不处理 apply/click。
             if ((m_ToolRaycastSystem.raycastFlags & (RaycastFlags.DebugDisable | RaycastFlags.UIDisable)) != 0)
             {
                 return false;
@@ -241,82 +280,103 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 当前先使用 Unity InputSystem 的鼠标左键作为“确认选择”。
-        /// 这是一个不依赖额外配置文件的最小可用方案。
+        /// 根据当前状态刷新工具可视选中对象
+        /// 
+        /// 规则：
+        /// - 已锁定时，优先显示 SelectedEdge
+        /// - 未锁定时，显示 HoveredEdge
+        /// - 都没有时，清空高亮
         /// </summary>
-        private bool IsPrimaryMousePressedThisFrame()
+        private void RefreshVisualSelection()
         {
-            return Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+            if (m_ToolSystem == null)
+            {
+                return;
+            }
+
+            Entity visualEntity = SelectedEdge != Entity.Null ? SelectedEdge : HoveredEdge;
+            m_ToolSystem.selected = visualEntity;
+        }
+
+        /// <summary>
+        /// 内部清空锁定状态
+        /// </summary>
+        private void ClearSelectionInternal(bool emitSelectionEvent)
+        {
+            SelectedEdge = Entity.Null;
+
+            if (emitSelectionEvent)
+            {
+                HasNewSelection = true;
+            }
+
+            RefreshVisualSelection();
         }
 
         private Entity TryGetHoveredRoadEdge()
         {
             if (!GetRaycastResult(out Entity hitEntity, out _))
             {
-                Logger.Info("TryGetHoveredRoadEdge: GetRaycastResult = false");
                 return Entity.Null;
             }
-
-            Logger.Info($"TryGetHoveredRoadEdge: hitEntity = {hitEntity.Index}");
 
             Entity edgeEntity = ResolveRoadEdge(hitEntity);
 
-            Logger.Info($"TryGetHoveredRoadEdge: resolvedEdge = {edgeEntity.Index}");
-
-            if (edgeEntity == Entity.Null)
+            if (!IsValidEdge(edgeEntity))
             {
-                return Entity.Null;
-            }
-
-            if (!EntityManager.Exists(edgeEntity))
-            {
-                Logger.Info("TryGetHoveredRoadEdge: resolved edge 不存在");
-                return Entity.Null;
-            }
-
-            if (!EntityManager.HasComponent<Edge>(edgeEntity))
-            {
-                Logger.Info("TryGetHoveredRoadEdge: resolved entity 不是 Edge");
                 return Entity.Null;
             }
 
             return edgeEntity;
         }
 
+        private bool IsValidEdge(Entity entity)
+        {
+            if (entity == Entity.Null)
+            {
+                return false;
+            }
+
+            if (!EntityManager.Exists(entity))
+            {
+                return false;
+            }
+
+            if (!EntityManager.HasComponent<Edge>(entity))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         private Entity ResolveRoadEdge(Entity entity)
         {
             if (entity == Entity.Null)
             {
-                Logger.Info("ResolveRoadEdge: entity = Null");
                 return Entity.Null;
             }
 
             if (!EntityManager.Exists(entity))
             {
-                Logger.Info($"ResolveRoadEdge: entity {entity.Index} 不存在");
                 return Entity.Null;
             }
-
-            Logger.Info($"ResolveRoadEdge: inspecting entity {entity.Index}");
 
             // 1）直接命中道路 Edge
             if (EntityManager.HasComponent<Edge>(entity))
             {
-                Logger.Info("ResolveRoadEdge: 直接命中 Edge");
                 return entity;
             }
 
-            // 2）命中子实体，通过 Owner 向上回溯
+            // 2）命中子实体时，通过 Owner 向上找
             if (EntityManager.HasComponent<Owner>(entity))
             {
                 Owner owner = EntityManager.GetComponentData<Owner>(entity);
-                Logger.Info($"ResolveRoadEdge: 命中 Owner，owner = {owner.m_Owner.Index}");
 
                 if (owner.m_Owner != Entity.Null && EntityManager.Exists(owner.m_Owner))
                 {
                     if (EntityManager.HasComponent<Edge>(owner.m_Owner))
                     {
-                        Logger.Info("ResolveRoadEdge: 通过 Owner 找到 Edge");
                         return owner.m_Owner;
                     }
                 }
@@ -326,26 +386,22 @@ namespace Transit_Scope.code
             if (EntityManager.HasComponent<Temp>(entity))
             {
                 Temp temp = EntityManager.GetComponentData<Temp>(entity);
-                Logger.Info($"ResolveRoadEdge: 命中 Temp，original = {temp.m_Original.Index}");
 
                 if (temp.m_Original != Entity.Null && EntityManager.Exists(temp.m_Original))
                 {
                     if (EntityManager.HasComponent<Edge>(temp.m_Original))
                     {
-                        Logger.Info("ResolveRoadEdge: 通过 Temp.original 找到 Edge");
                         return temp.m_Original;
                     }
 
                     if (EntityManager.HasComponent<Owner>(temp.m_Original))
                     {
                         Owner owner = EntityManager.GetComponentData<Owner>(temp.m_Original);
-                        Logger.Info($"ResolveRoadEdge: Temp.original 的 Owner = {owner.m_Owner.Index}");
 
                         if (owner.m_Owner != Entity.Null && EntityManager.Exists(owner.m_Owner))
                         {
                             if (EntityManager.HasComponent<Edge>(owner.m_Owner))
                             {
-                                Logger.Info("ResolveRoadEdge: 通过 Temp.original.Owner 找到 Edge");
                                 return owner.m_Owner;
                             }
                         }
@@ -353,7 +409,6 @@ namespace Transit_Scope.code
                 }
             }
 
-            Logger.Info("ResolveRoadEdge: 最终未解析到 Edge");
             return Entity.Null;
         }
     }

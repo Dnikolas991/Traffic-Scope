@@ -1,10 +1,20 @@
 import { bindValue, trigger } from "cs2/api";
 
-// 1. 绑定后端的 ValueBinding
-// 参数分别对应 C# 中的组名 "transitScope", 绑定名 "isActive", 以及默认值 false
-export const isActiveBinding = bindValue<boolean>("transitScope", "isActive", false);
+/**
+ * 后端 ValueBinding
+ */
+export const isActiveBinding = bindValue<boolean>("transitScope", "isActive");
+export const hoveredEdgeIdBinding = bindValue<number>("transitScope", "hoveredEdgeId");
+export const selectedEdgeIdBinding = bindValue<number>("transitScope", "selectedEdgeId");
+export const statusTextBinding = bindValue<string>("transitScope", "statusText");
 
-// 2. 封装发送给后端的 Trigger
+/**
+ * 后端 TriggerBinding
+ */
 export const toggleTransitScope = (active: boolean) => {
     trigger("transitScope", "toggle", active);
+};
+
+export const confirmTransitScope = () => {
+    trigger("transitScope", "confirm");
 };

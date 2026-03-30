@@ -1,8 +1,7 @@
 ﻿using Game;
+using Game.Creatures;
 using Game.Net;
 using Game.Vehicles;
-using Game.Creatures;
-using Unity.Collections;
 using Unity.Entities;
 
 namespace Transit_Scope.code
@@ -27,9 +26,10 @@ namespace Transit_Scope.code
 
             Entity selectedEdge = m_ToolSystem.SelectedEdge;
 
-            // 这一帧的选择事件立刻消费掉
+            // 这一帧的“新选择事件”消费掉
             m_ToolSystem.ClearNewSelectionFlag();
 
+            // 取消选择时，这里直接返回，不做流量分析
             if (selectedEdge == Entity.Null)
             {
                 return;
@@ -42,32 +42,12 @@ namespace Transit_Scope.code
 
             if (!EntityManager.HasComponent<Edge>(selectedEdge))
             {
-                Logger.Info("当前确认对象不是道路 Edge");
                 return;
             }
 
-            Logger.Info($"当前确认道路: {selectedEdge.Index}");
-
-            NativeArray<ComponentType> components = EntityManager.GetComponentTypes(selectedEdge);
-            string compList = "";
-            for (int i = 0; i < components.Length; i++)
-            {
-                var managedType = components[i].GetManagedType();
-                compList += managedType != null ? managedType.Name : components[i].ToString();
-
-                if (i < components.Length - 1)
-                {
-                    compList += ", ";
-                }
-            }
-            components.Dispose();
-
-            Logger.Info($"[组件列表] {compList}");
-
             if (!EntityManager.HasBuffer<SubLane>(selectedEdge))
             {
-                Logger.Info("[警告] 该道路没有 SubLane 缓冲区");
-                Logger.Info("================================================");
+                Logger.Info($"道路 #{selectedEdge.Index} 没有 SubLane 数据");
                 return;
             }
 
@@ -159,9 +139,9 @@ namespace Transit_Scope.code
 
             int total = personalCarCount + taxiCount + cargoCount + publicTransportCount + cityServiceCount + humanCount + otherCount;
 
-            Logger.Info($"[数据] 总流量: {total} | 私家车: {personalCarCount} | 出租车: {taxiCount} | 货运: {cargoCount}");
-            Logger.Info($"[数据] 公交客运: {publicTransportCount} | 城市服务: {cityServiceCount} | 行人/自行车: {humanCount} | 其它: {otherCount}");
-            Logger.Info("================================================");
+            Logger.Info(
+                $"[TransitScope] 道路 #{selectedEdge.Index} | 总流量:{total} | 私家车:{personalCarCount} | 出租车:{taxiCount} | 货运:{cargoCount} | 公交客运:{publicTransportCount} | 城市服务:{cityServiceCount} | 行人/自行车:{humanCount} | 其它:{otherCount}"
+            );
         }
     }
 }
