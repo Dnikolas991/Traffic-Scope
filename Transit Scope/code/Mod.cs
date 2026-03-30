@@ -4,7 +4,7 @@ using Game.Modding;
 using Game.SceneFlow;
 // 注意：移除了所有与 Colossal.UI 和 System.IO 相关的冗余引用
 
-namespace Transit_Scope
+namespace Transit_Scope.code
 {
     public class Mod : IMod
     {
@@ -14,6 +14,7 @@ namespace Transit_Scope
         {
             Log.Info(nameof(OnLoad));
             
+            //注册相关组件
             updateSystem.UpdateAt<TransitScopeToolSystem>(SystemUpdatePhase.ToolUpdate);
             updateSystem.UpdateAt<TransitScopeUISystem>(SystemUpdatePhase.UIUpdate);
             updateSystem.UpdateAt<TransitScopeSystem>(SystemUpdatePhase.UIUpdate);

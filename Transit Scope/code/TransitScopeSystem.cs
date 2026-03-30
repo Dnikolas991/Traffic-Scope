@@ -5,63 +5,73 @@ using Game.Creatures;
 using Unity.Collections;
 using Unity.Entities;
 
-namespace Transit_Scope
+namespace Transit_Scope.code
 {
     public partial class TransitScopeSystem : GameSystemBase
     {
-        private TransitScopeToolSystem m_TransitScopeToolSystem;
-        private Entity m_LastSelected = Entity.Null;
+        private TransitScopeToolSystem m_ToolSystem;
 
         protected override void OnCreate()
         {
             base.OnCreate();
-            m_TransitScopeToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
+            m_ToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
             Logger.Info("TransitScopeSystem 启动");
         }
 
         protected override void OnUpdate()
         {
-            Entity selectedEntity = m_TransitScopeToolSystem.SelectedEntity;
-
-            if (selectedEntity == Entity.Null || selectedEntity == m_LastSelected)
+            if (!m_ToolSystem.HasNewSelection)
+            {
                 return;
+            }
 
-            if (!EntityManager.Exists(selectedEntity))
+            Entity selectedEdge = m_ToolSystem.SelectedEdge;
+
+            // 这一帧的选择事件立刻消费掉
+            m_ToolSystem.ClearNewSelectionFlag();
+
+            if (selectedEdge == Entity.Null)
+            {
                 return;
+            }
 
-            m_LastSelected = selectedEntity;
-            Logger.Info($"当前选择实体: {selectedEntity.Index}");
+            if (!EntityManager.Exists(selectedEdge))
+            {
+                return;
+            }
 
-            NativeArray<ComponentType> components = EntityManager.GetComponentTypes(selectedEntity);
+            if (!EntityManager.HasComponent<Edge>(selectedEdge))
+            {
+                Logger.Info("当前确认对象不是道路 Edge");
+                return;
+            }
+
+            Logger.Info($"当前确认道路: {selectedEdge.Index}");
+
+            NativeArray<ComponentType> components = EntityManager.GetComponentTypes(selectedEdge);
             string compList = "";
             for (int i = 0; i < components.Length; i++)
             {
                 var managedType = components[i].GetManagedType();
                 compList += managedType != null ? managedType.Name : components[i].ToString();
+
                 if (i < components.Length - 1)
+                {
                     compList += ", ";
+                }
             }
             components.Dispose();
 
             Logger.Info($"[组件列表] {compList}");
 
-            if (!EntityManager.HasComponent<Edge>(selectedEntity))
+            if (!EntityManager.HasBuffer<SubLane>(selectedEdge))
             {
-                Logger.Info("[分析] 当前选中实体不是 Edge");
-                Logger.Info($"================================================\n");
+                Logger.Info("[警告] 该道路没有 SubLane 缓冲区");
+                Logger.Info("================================================");
                 return;
             }
 
-            Logger.Info("[分析] 确认为路段 (Edge)！开始统计流量...");
-
-            if (!EntityManager.HasBuffer<SubLane>(selectedEntity))
-            {
-                Logger.Info("[警告] 该路段没有 SubLane 缓冲区！");
-                Logger.Info($"================================================\n");
-                return;
-            }
-
-            DynamicBuffer<SubLane> lanesBuffer = EntityManager.GetBuffer<SubLane>(selectedEntity);
+            DynamicBuffer<SubLane> lanesBuffer = EntityManager.GetBuffer<SubLane>(selectedEdge);
 
             int personalCarCount = 0;
             int taxiCount = 0;
@@ -75,8 +85,15 @@ namespace Transit_Scope
             {
                 Entity laneEntity = lanesBuffer[i].m_SubLane;
 
-                if (!EntityManager.Exists(laneEntity) || !EntityManager.HasBuffer<LaneObject>(laneEntity))
+                if (!EntityManager.Exists(laneEntity))
+                {
                     continue;
+                }
+
+                if (!EntityManager.HasBuffer<LaneObject>(laneEntity))
+                {
+                    continue;
+                }
 
                 DynamicBuffer<LaneObject> laneObjects = EntityManager.GetBuffer<LaneObject>(laneEntity);
 
@@ -85,7 +102,9 @@ namespace Transit_Scope
                     Entity obj = laneObjects[j].m_LaneObject;
 
                     if (!EntityManager.Exists(obj))
+                    {
                         continue;
+                    }
 
                     if (EntityManager.HasComponent<Human>(obj))
                     {
@@ -93,21 +112,39 @@ namespace Transit_Scope
                     }
                     else if (EntityManager.HasComponent<Car>(obj))
                     {
-                        if (EntityManager.HasComponent<PersonalCar>(obj)) personalCarCount++;
-                        else if (EntityManager.HasComponent<Taxi>(obj)) taxiCount++;
+                        if (EntityManager.HasComponent<PersonalCar>(obj))
+                        {
+                            personalCarCount++;
+                        }
+                        else if (EntityManager.HasComponent<Taxi>(obj))
+                        {
+                            taxiCount++;
+                        }
                         else if (EntityManager.HasComponent<CargoTransport>(obj) ||
                                  EntityManager.HasComponent<DeliveryTruck>(obj) ||
                                  EntityManager.HasComponent<GoodsDeliveryVehicle>(obj) ||
-                                 EntityManager.HasComponent<PostVan>(obj)) cargoCount++;
+                                 EntityManager.HasComponent<PostVan>(obj))
+                        {
+                            cargoCount++;
+                        }
                         else if (EntityManager.HasComponent<PublicTransport>(obj) ||
-                                 EntityManager.HasComponent<PassengerTransport>(obj)) publicTransportCount++;
+                                 EntityManager.HasComponent<PassengerTransport>(obj))
+                        {
+                            publicTransportCount++;
+                        }
                         else if (EntityManager.HasComponent<Ambulance>(obj) ||
                                  EntityManager.HasComponent<PoliceCar>(obj) ||
                                  EntityManager.HasComponent<FireEngine>(obj) ||
                                  EntityManager.HasComponent<GarbageTruck>(obj) ||
                                  EntityManager.HasComponent<Hearse>(obj) ||
-                                 EntityManager.HasComponent<RoadMaintenanceVehicle>(obj)) cityServiceCount++;
-                        else otherCount++;
+                                 EntityManager.HasComponent<RoadMaintenanceVehicle>(obj))
+                        {
+                            cityServiceCount++;
+                        }
+                        else
+                        {
+                            otherCount++;
+                        }
                     }
                     else if (EntityManager.HasComponent<Bicycle>(obj))
                     {
@@ -124,7 +161,7 @@ namespace Transit_Scope
 
             Logger.Info($"[数据] 总流量: {total} | 私家车: {personalCarCount} | 出租车: {taxiCount} | 货运: {cargoCount}");
             Logger.Info($"[数据] 公交客运: {publicTransportCount} | 城市服务: {cityServiceCount} | 行人/自行车: {humanCount} | 其它: {otherCount}");
-            Logger.Info($"================================================\n");
+            Logger.Info("================================================");
         }
     }
 }
