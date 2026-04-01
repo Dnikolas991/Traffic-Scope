@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Transit Scope")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+633997e3d852a1679fc964994bfd738bd6f474e5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+517a40fa672f69c3850616eda512146af910f5b1")]
 [assembly: System.Reflection.AssemblyProductAttribute("Transit Scope")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Transit Scope")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

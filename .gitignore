@@ -1,7 +1,112 @@
-bin/
-obj/
-/packages/
-riderModule.iml
-/_ReSharper.Caches/
-Traffic.sln.DotSettings.user
-/UI/node_modules
+# =========================
+# Build outputs
+# =========================
+[Bb]in/
+[Oo]bj/
+out/
+build/
+Build/
+dist/
+
+# =========================
+# Rider / IntelliJ
+# =========================
+.idea/
+*.sln.iml
+*.cache
+
+# =========================
+# Visual Studio
+# =========================
+.vs/
+*.user
+*.userosscache
+*.suo
+*.rsuser
+*.VC.db
+*.VC.VC.opendb
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+# =========================
+# Unity / generated caches
+# =========================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# =========================
+# NuGet / packages
+# =========================
+packages/
+*.nupkg
+*.snupkg
+
+# keep manifest-like files if you use them manually
+!packages.config
+
+# =========================
+# Generated project files
+# =========================
+*.csproj.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.cache
+*.tmp
+*.temp
+
+# =========================
+# Test / coverage
+# =========================
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Local env / secrets
+# =========================
+.env
+.env.*
+*.secret
+*.local
+
+# =========================
+# BepInEx / mod runtime output
+# =========================
+BepInEx/
+*.dll
+*.deps.json
+
+# keep your source code and project files
+!*.cs
+!*.csproj
+!*.sln
+!README.md
+!LICENSE
+!*.json
+!*.xml
