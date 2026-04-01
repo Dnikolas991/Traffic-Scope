@@ -5,27 +5,26 @@ interface Props {
 }
 
 export const TransitScopeIcon = ({ active }: Props) => {
-    const color = active ? "#F4FAFF" : "#D6DEE7";
+    /**
+     * 这里直接照抄原版 TrafficRoutes.svg 的主体图形路径，
+     * 只保留图标本体，不把原 svg 的底层背景一起带进来。
+     * 按钮外围背景由外层按钮样式统一提供，并改成用户要求的淡蓝色底图。
+     */
+    const color = active ? "#F3FBFF" : "#D9EEF8";
 
     return (
         <svg
-            viewBox="0 0 24 24"
-            width="24"
-            height="24"
+            viewBox="0 0 64 64"
+            width="34"
+            height="34"
             fill="none"
-            stroke={color}
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            aria-hidden="true"
         >
-            <circle cx="9.5" cy="9.5" r="4.25" />
-            <path d="M12.7 12.7L17.2 17.2" />
-            <path d="M4 19.2H10.5" />
-            <path d="M6.5 17V21.4" />
-            <path d="M14.2 20.8V15.5" />
-            <path d="M17.1 20.8V13.8" />
-            <path d="M20 20.8V16.6" />
-            <path d="M13.2 20.8H21" />
+            <path
+                d="M44.582,34.251V14.27c0-5.4-5.372-9.77-10.77-9.77s-10.77,4.372-10.77,9.77V38.7c0,2.687-1.2,3.885-3.885,3.885s-3.885-1.2-3.885-3.885V18.716h3.885L11.828,4.5,4.5,18.716H8.385V38.7c0,5.4,5.372,9.77,10.77,9.77s10.77-4.372,10.77-9.77V14.27c0-2.687,1.2-3.885,3.885-3.885s3.885,1.2,3.885,3.885v19.98c-3.358,1.19-4.372,4.626-3.768,8.137a7.323,7.323,0,0,0,14.539-1.249C48.467,37.964,47.415,35.277,44.582,34.251Z"
+                transform="translate(58.483 5.517) rotate(90)"
+                fill={color}
+            />
         </svg>
     );
 };

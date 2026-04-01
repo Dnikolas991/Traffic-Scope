@@ -2,8 +2,10 @@ using Game;
 using Game.Creatures;
 using Game.Net;
 using Game.Prefabs;
+using Game.Rendering;
 using Game.Vehicles;
 using Unity.Entities;
+using Unity.Mathematics;
 using NetSubLane = Game.Net.SubLane;
 using PrefabRefData = Game.Prefabs.PrefabRef;
 
@@ -11,6 +13,7 @@ namespace Transit_Scope.code
 {
     /// <summary>
     /// 负责在玩家确认选中对象后做统计分析，并把结果推给前端图形化展示。
+    /// 道路输出交通流量分类，建筑输出建筑本体信息，二者彻底分开。
     /// </summary>
     public partial class TransitScopeSystem : GameSystemBase
     {
@@ -36,7 +39,7 @@ namespace Transit_Scope.code
             Entity selected = m_ToolSystem.SelectedEntity;
             TransitScopeToolSystem.SelectionKind kind = m_ToolSystem.SelectedKind;
 
-            // 只消费一次，避免每帧重复计算和重复刷新 UI。
+            // 每次确认选中后只统计一次，避免每帧重复分析。
             m_ToolSystem.ClearNewSelectionFlag();
 
             if (selected == Entity.Null || !EntityManager.Exists(selected))
@@ -58,8 +61,7 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 统计道路/轨道上的对象构成，并转成饼图数据。
-        /// 用户强调“占比很重要”，所以这里会把各类交通对象拆得比较细。
+        /// 统计道路/轨道上的对象构成，并转换成饼图数据。
         /// </summary>
         private void AnalyzeRoad(Entity selectedEdge)
         {
@@ -238,8 +240,9 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 建筑当前先展示基础概览信息。
-        /// 虽然不是交通流量，但依然以“占比”方式组织成饼图，方便后续继续扩展。
+        /// 建筑不再复用车流统计。
+        /// 这里改成输出真实的建筑信息构成，包括地块尺寸、模型体量和子对象数量。
+        /// 这些数据都来自当前建筑实体或其 prefab，而不是道路上的交通对象。
         /// </summary>
         private void AnalyzeBuilding(Entity building)
         {
@@ -272,28 +275,55 @@ namespace Transit_Scope.code
                 }
             }
 
+            int footprintArea = math.max(0, lotWidth * lotDepth);
+            int modelWidth = 0;
+            int modelDepth = 0;
+            int modelHeight = 0;
+
+            // 使用渲染包围盒近似读取建筑模型尺寸。
+            // 这是建筑本体几何信息，不是交通流量。
+            if (EntityManager.HasComponent<CullingInfo>(building))
+            {
+                CullingInfo cullingInfo = EntityManager.GetComponentData<CullingInfo>(building);
+                float3 size = cullingInfo.m_Bounds.max - cullingInfo.m_Bounds.min;
+                modelWidth = math.max(0, (int)math.round(size.x));
+                modelHeight = math.max(0, (int)math.round(size.y));
+                modelDepth = math.max(0, (int)math.round(size.z));
+            }
+
             TransitScopeSelectionStats stats = new()
             {
-                Title = "建筑概览",
+                Title = "建筑信息概览",
                 Subtitle = $"实体 #{building.Index}" + (prefabIndex > 0 ? $" · Prefab #{prefabIndex}" : string.Empty),
-                Total = lotWidth + lotDepth + subObjectCount
+                Total = 0
             };
 
-            AddStat(stats, "地块宽度", lotWidth, "#5DB7FF");
-            AddStat(stats, "地块深度", lotDepth, "#6ECF88");
-            AddStat(stats, "子对象", subObjectCount, "#F2B35E");
+            AddStat(stats, "占地面积", footprintArea, "#5DB7FF");
+            AddStat(stats, "模型高度", modelHeight, "#6ECF88");
+            AddStat(stats, "模型宽度", modelWidth, "#F2B35E");
+            AddStat(stats, "模型进深", modelDepth, "#8B9BFF");
+            AddStat(stats, "子对象", subObjectCount, "#FF8A7A");
+            AddStat(stats, "地块宽度", lotWidth, "#60D5C0");
+            AddStat(stats, "地块深度", lotDepth, "#C38BFF");
 
             if (stats.Items.Count == 0)
             {
                 AddStat(stats, "基础信息", 1, "#7F8EA3");
-                stats.Total = 1;
             }
 
+            // 建筑总量按当前展示项目之和计算，方便前端直接计算占比。
+            int total = 0;
+            for (int i = 0; i < stats.Items.Count; i++)
+            {
+                total += stats.Items[i].Value;
+            }
+
+            stats.Total = math.max(1, total);
             m_UISystem.PresentStats(stats);
         }
 
         /// <summary>
-        /// 只把正数统计项加入饼图，避免图例里堆满 0 值噪音。
+        /// 只把正数统计项加入饼图，避免图例里出现大量 0 值噪音。
         /// </summary>
         private static void AddStat(TransitScopeSelectionStats stats, string label, int value, string color)
         {
