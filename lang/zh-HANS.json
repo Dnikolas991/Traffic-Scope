@@ -1,0 +1,20 @@
+{
+  "stats.total": "总量",
+  "stats.title.road": "道路流量",
+  "stats.title.building": "建筑周边流量",
+  "stats.subtitle.selected_edge": "已选边 #{0}",
+  "stats.subtitle.nearby_building": "建筑 #{0} 周边交通",
+  "stats.item.private_cars": "私家车",
+  "stats.item.taxis": "出租车",
+  "stats.item.cargo": "货运",
+  "stats.item.public_transit": "公共交通",
+  "stats.item.city_service": "城市服务",
+  "stats.item.bicycles": "自行车",
+  "stats.item.rail": "轨道交通",
+  "stats.item.water": "水上交通",
+  "stats.item.air": "航空交通",
+  "stats.item.pedestrians": "行人",
+  "stats.item.other_vehicles": "其它车辆",
+  "stats.item.others": "其它",
+  "stats.item.no_traffic": "暂无流量"
+}

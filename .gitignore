@@ -110,3 +110,14 @@ BepInEx/
 !LICENSE
 !*.json
 !*.xml
+
+# =========================
+# Explicit cache/dependency ignores after re-includes
+# =========================
+.idea/
+UI/node_modules/
+UI/dist/
+Library/
+bin/
+obj/
+*.pid

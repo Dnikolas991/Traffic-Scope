@@ -1,0 +1,20 @@
+{
+  "stats.total": "Total",
+  "stats.title.road": "Traffic Flow",
+  "stats.title.building": "Building Traffic",
+  "stats.subtitle.selected_edge": "Selected edge #{0}",
+  "stats.subtitle.nearby_building": "Nearby traffic around building #{0}",
+  "stats.item.private_cars": "Private Cars",
+  "stats.item.taxis": "Taxis",
+  "stats.item.cargo": "Cargo",
+  "stats.item.public_transit": "Public Transit",
+  "stats.item.city_service": "City Service",
+  "stats.item.bicycles": "Bicycles",
+  "stats.item.rail": "Rail",
+  "stats.item.water": "Water",
+  "stats.item.air": "Air",
+  "stats.item.pedestrians": "Pedestrians",
+  "stats.item.other_vehicles": "Other Vehicles",
+  "stats.item.others": "Others",
+  "stats.item.no_traffic": "No Traffic"
+}

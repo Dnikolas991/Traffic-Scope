@@ -1,0 +1,20 @@
+{
+  "stats.total": "Gesamt",
+  "stats.title.road": "Verkehrsfluss",
+  "stats.title.building": "Verkehr am Gebäude",
+  "stats.subtitle.selected_edge": "Ausgewählte Kante #{0}",
+  "stats.subtitle.nearby_building": "Verkehr in der Nähe von Gebäude #{0}",
+  "stats.item.private_cars": "Privatautos",
+  "stats.item.taxis": "Taxis",
+  "stats.item.cargo": "Fracht",
+  "stats.item.public_transit": "öffentlicher Verkehr",
+  "stats.item.city_service": "Stadtdienste",
+  "stats.item.bicycles": "Fahrräder",
+  "stats.item.rail": "Schienenverkehr",
+  "stats.item.water": "Wasserverkehr",
+  "stats.item.air": "Luftverkehr",
+  "stats.item.pedestrians": "Fussgänger",
+  "stats.item.other_vehicles": "Andere Fahrzeuge",
+  "stats.item.others": "Sonstiges",
+  "stats.item.no_traffic": "Kein Verkehr"
+}
