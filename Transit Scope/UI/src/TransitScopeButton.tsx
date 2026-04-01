@@ -1,29 +1,56 @@
-import React from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { useValue } from "cs2/api";
-import { isActiveBinding, toggleTransitScope } from "./bindings";
+import { hasStatsBinding, isActiveBinding, toggleTransitScope } from "./bindings";
 import { TransitScopeIcon } from "./TransitScopeIcon";
 import { TransitScopeStatsPanel } from "./TransitScopeStatsPanel";
 
+interface AnchorPosition {
+    x: number;
+    y: number;
+}
+
 /**
  * 左上角入口按钮。
- * 这次按参考模组 Traffic 的风格回收视觉：
- * 1. 按钮尺寸恢复成更接近原版浮动工具按钮的体量。
- * 2. 去掉当前这层偏“玻璃卡片”的自定义外观。
- * 3. 只保留图标主体和淡蓝色底图。
+ * 这里参考 Traffic 的挂载方式，保留入口按钮挂在 GameTopLeft，
+ * 但把统计面板改成基于按钮位置的浮层锚定，而不是继续放在普通文档流里。
+ * 这样按钮不会被面板顶歪，整体位置也更接近原版工具入口。
  */
 export const TransitScopeButton = () => {
     const isActive = useValue(isActiveBinding);
+    const hasStats = useValue(hasStatsBinding);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [anchor, setAnchor] = useState<AnchorPosition | null>(null);
 
     const handleToggle = () => {
         toggleTransitScope(!isActive);
     };
 
+    useLayoutEffect(() => {
+        const updateAnchor = () => {
+            if (!containerRef.current) {
+                setAnchor(null);
+                return;
+            }
+
+            const rect = containerRef.current.getBoundingClientRect();
+            setAnchor({
+                x: rect.left,
+                y: rect.bottom + 8
+            });
+        };
+
+        updateAnchor();
+        window.addEventListener("resize", updateAnchor);
+        return () => window.removeEventListener("resize", updateAnchor);
+    }, [isActive, hasStats]);
+
     return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+        <>
             <div
+                ref={containerRef}
                 style={{
                     pointerEvents: "auto",
-                    margin: "8px 10px 0",
+                    margin: "6px 8px 0",
                     position: "relative"
                 }}
             >
@@ -54,7 +81,7 @@ export const TransitScopeButton = () => {
                 </button>
             </div>
 
-            <TransitScopeStatsPanel />
-        </div>
+            <TransitScopeStatsPanel anchor={anchor} />
+        </>
     );
 };

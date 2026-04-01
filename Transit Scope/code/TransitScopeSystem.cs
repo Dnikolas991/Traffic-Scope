@@ -1,9 +1,12 @@
+using Colossal.Mathematics;
 using Game;
 using Game.Creatures;
 using Game.Net;
+using Game.Objects;
 using Game.Prefabs;
 using Game.Rendering;
 using Game.Vehicles;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using NetSubLane = Game.Net.SubLane;
@@ -13,12 +16,46 @@ namespace Transit_Scope.code
 {
     /// <summary>
     /// 负责在玩家确认选中对象后做统计分析，并把结果推给前端图形化展示。
-    /// 道路输出交通流量分类，建筑输出建筑本体信息，二者彻底分开。
+    /// 这里统一输出“交通流量构成”：
+    /// 1. 选中道路/轨道时，统计该边上的 traffic objects。
+    /// 2. 选中建筑时，统计建筑周边一定范围内道路/轨道上的 traffic objects。
+    /// 这样建筑面板不再出现与交通无关的建筑尺寸信息。
     /// </summary>
     public partial class TransitScopeSystem : GameSystemBase
     {
+        private struct TrafficCounters
+        {
+            public int PersonalCars;
+            public int Taxis;
+            public int Cargo;
+            public int PublicTransport;
+            public int CityService;
+            public int Bicycles;
+            public int Trains;
+            public int Watercraft;
+            public int Aircraft;
+            public int Humans;
+            public int OtherVehicles;
+            public int Others;
+
+            public int Total =>
+                PersonalCars +
+                Taxis +
+                Cargo +
+                PublicTransport +
+                CityService +
+                Bicycles +
+                Trains +
+                Watercraft +
+                Aircraft +
+                Humans +
+                OtherVehicles +
+                Others;
+        }
+
         private TransitScopeToolSystem m_ToolSystem;
         private TransitScopeUISystem m_UISystem;
+        private EntityQuery m_TrafficEdgeQuery;
 
         protected override void OnCreate()
         {
@@ -26,6 +63,13 @@ namespace Transit_Scope.code
 
             m_ToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
             m_UISystem = World.GetOrCreateSystemManaged<TransitScopeUISystem>();
+
+            // 该查询只在“确认选中建筑”后使用一次，用于扫描建筑周边的道路/轨道边。
+            m_TrafficEdgeQuery = GetEntityQuery(
+                ComponentType.ReadOnly<Edge>(),
+                ComponentType.ReadOnly<Curve>(),
+                ComponentType.ReadOnly<NetSubLane>());
+
             Logger.Info("TransitScopeSystem 启动");
         }
 
@@ -39,7 +83,7 @@ namespace Transit_Scope.code
             Entity selected = m_ToolSystem.SelectedEntity;
             TransitScopeToolSystem.SelectionKind kind = m_ToolSystem.SelectedKind;
 
-            // 每次确认选中后只统计一次，避免每帧重复分析。
+            // 每次确认选中后只消费一次事件，避免每帧重复统计。
             m_ToolSystem.ClearNewSelectionFlag();
 
             if (selected == Entity.Null || !EntityManager.Exists(selected))
@@ -56,12 +100,12 @@ namespace Transit_Scope.code
 
             if (kind == TransitScopeToolSystem.SelectionKind.Building)
             {
-                AnalyzeBuilding(selected);
+                AnalyzeBuildingTraffic(selected);
             }
         }
 
         /// <summary>
-        /// 统计道路/轨道上的对象构成，并转换成饼图数据。
+        /// 统计单条道路/轨道上的 traffic objects。
         /// </summary>
         private void AnalyzeRoad(Entity selectedEdge)
         {
@@ -71,32 +115,80 @@ namespace Transit_Scope.code
                 return;
             }
 
-            if (!EntityManager.HasBuffer<NetSubLane>(selectedEdge))
+            TrafficCounters counters = default;
+            AccumulateTrafficFromEdge(selectedEdge, ref counters);
+
+            TransitScopeSelectionStats stats = BuildTrafficStats(
+                title: "Traffic Flow",
+                subtitle: $"Selected edge #{selectedEdge.Index}",
+                counters);
+
+            m_UISystem.PresentStats(stats);
+        }
+
+        /// <summary>
+        /// 统计建筑周边的道路/轨道流量。
+        /// 核心思路：
+        /// 1. 读取建筑中心点。
+        /// 2. 估算一个搜索半径。
+        /// 3. 遍历所有交通边，找到位于半径内的道路/轨道。
+        /// 4. 汇总这些边上的 traffic objects。
+        ///
+        /// 这虽然是近似方案，但语义正确：建筑面板展示的是“建筑周边交通流量”，
+        /// 而不是建筑尺寸或其它无关信息。
+        /// </summary>
+        private void AnalyzeBuildingTraffic(Entity building)
+        {
+            if (!TryGetBuildingCenter(building, out float3 buildingCenter))
             {
-                m_UISystem.PresentStats(new TransitScopeSelectionStats
-                {
-                    Title = "道路流量统计",
-                    Subtitle = $"实体 #{selectedEdge.Index}",
-                    Total = 0
-                });
+                m_UISystem.ClearStats();
                 return;
             }
 
-            DynamicBuffer<NetSubLane> lanesBuffer = EntityManager.GetBuffer<NetSubLane>(selectedEdge);
+            float searchRadius = EstimateBuildingTrafficSearchRadius(building);
+            TrafficCounters counters = default;
 
-            int personalCarCount = 0;
-            int taxiCount = 0;
-            int cargoCount = 0;
-            int publicTransportCount = 0;
-            int cityServiceCount = 0;
-            int bicycleCount = 0;
-            int trainCount = 0;
-            int watercraftCount = 0;
-            int aircraftCount = 0;
-            int humanCount = 0;
-            int otherVehicleCount = 0;
-            int otherCount = 0;
+            using NativeArray<Entity> edges = m_TrafficEdgeQuery.ToEntityArray(World.UpdateAllocator.ToAllocator);
+            for (int i = 0; i < edges.Length; i++)
+            {
+                Entity edge = edges[i];
 
+                if (!EntityManager.HasComponent<Curve>(edge))
+                {
+                    continue;
+                }
+
+                Curve curve = EntityManager.GetComponentData<Curve>(edge);
+                float3 midpoint = EvaluateBezier(curve.m_Bezier, 0.5f);
+
+                // 只统计建筑附近的边，避免把整张地图的交通都混进来。
+                if (math.distance(midpoint, buildingCenter) > searchRadius)
+                {
+                    continue;
+                }
+
+                AccumulateTrafficFromEdge(edge, ref counters);
+            }
+
+            TransitScopeSelectionStats stats = BuildTrafficStats(
+                title: "Building Traffic",
+                subtitle: $"Nearby traffic around building #{building.Index}",
+                counters);
+
+            m_UISystem.PresentStats(stats);
+        }
+
+        /// <summary>
+        /// 将某一条道路/轨道边上的 lane objects 累加到统一的交通分类统计中。
+        /// </summary>
+        private void AccumulateTrafficFromEdge(Entity edge, ref TrafficCounters counters)
+        {
+            if (!EntityManager.Exists(edge) || !EntityManager.HasBuffer<NetSubLane>(edge))
+            {
+                return;
+            }
+
+            DynamicBuffer<NetSubLane> lanesBuffer = EntityManager.GetBuffer<NetSubLane>(edge);
             for (int i = 0; i < lanesBuffer.Length; i++)
             {
                 Entity laneEntity = lanesBuffer[i].m_SubLane;
@@ -107,223 +199,219 @@ namespace Transit_Scope.code
                 }
 
                 DynamicBuffer<LaneObject> laneObjects = EntityManager.GetBuffer<LaneObject>(laneEntity);
-
                 for (int j = 0; j < laneObjects.Length; j++)
                 {
-                    Entity obj = laneObjects[j].m_LaneObject;
-
-                    if (!EntityManager.Exists(obj))
-                    {
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Human>(obj))
-                    {
-                        humanCount++;
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Bicycle>(obj))
-                    {
-                        bicycleCount++;
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Train>(obj))
-                    {
-                        trainCount++;
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Watercraft>(obj))
-                    {
-                        watercraftCount++;
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Aircraft>(obj) ||
-                        EntityManager.HasComponent<Game.Vehicles.Airplane>(obj) ||
-                        EntityManager.HasComponent<Game.Vehicles.Helicopter>(obj))
-                    {
-                        aircraftCount++;
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Car>(obj))
-                    {
-                        if (EntityManager.HasComponent<Game.Vehicles.PersonalCar>(obj))
-                        {
-                            personalCarCount++;
-                        }
-                        else if (EntityManager.HasComponent<Game.Vehicles.Taxi>(obj))
-                        {
-                            taxiCount++;
-                        }
-                        else if (EntityManager.HasComponent<Game.Vehicles.CargoTransport>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.DeliveryTruck>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.GoodsDeliveryVehicle>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.PostVan>(obj))
-                        {
-                            cargoCount++;
-                        }
-                        else if (EntityManager.HasComponent<Game.Vehicles.PublicTransport>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.PassengerTransport>(obj))
-                        {
-                            publicTransportCount++;
-                        }
-                        else if (EntityManager.HasComponent<Game.Vehicles.Ambulance>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.FireEngine>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.GarbageTruck>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.Hearse>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.PoliceCar>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.RoadMaintenanceVehicle>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.MaintenanceVehicle>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.ParkMaintenanceVehicle>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.PrisonerTransport>(obj) ||
-                                 EntityManager.HasComponent<Game.Vehicles.EvacuatingTransport>(obj))
-                        {
-                            cityServiceCount++;
-                        }
-                        else
-                        {
-                            otherVehicleCount++;
-                        }
-
-                        continue;
-                    }
-
-                    if (EntityManager.HasComponent<Game.Vehicles.Vehicle>(obj))
-                    {
-                        otherVehicleCount++;
-                        continue;
-                    }
-
-                    otherCount++;
+                    ClassifyTrafficObject(laneObjects[j].m_LaneObject, ref counters);
                 }
             }
-
-            int totalTraffic =
-                personalCarCount +
-                taxiCount +
-                cargoCount +
-                publicTransportCount +
-                cityServiceCount +
-                bicycleCount +
-                trainCount +
-                watercraftCount +
-                aircraftCount +
-                humanCount +
-                otherVehicleCount +
-                otherCount;
-
-            TransitScopeSelectionStats stats = new()
-            {
-                Title = "道路流量统计",
-                Subtitle = $"实体 #{selectedEdge.Index}",
-                Total = totalTraffic
-            };
-
-            AddStat(stats, "私家车", personalCarCount, "#5DB7FF");
-            AddStat(stats, "出租车", taxiCount, "#6ECF88");
-            AddStat(stats, "货运物流", cargoCount, "#F2B35E");
-            AddStat(stats, "公共交通", publicTransportCount, "#8B9BFF");
-            AddStat(stats, "城市服务", cityServiceCount, "#FF8A7A");
-            AddStat(stats, "自行车", bicycleCount, "#60D5C0");
-            AddStat(stats, "轨道交通", trainCount, "#C38BFF");
-            AddStat(stats, "水上交通", watercraftCount, "#4FC6F0");
-            AddStat(stats, "航空交通", aircraftCount, "#F28DDA");
-            AddStat(stats, "行人", humanCount, "#D6E2F0");
-            AddStat(stats, "其它车辆", otherVehicleCount, "#9AA7B6");
-            AddStat(stats, "其它对象", otherCount, "#738195");
-
-            m_UISystem.PresentStats(stats);
         }
 
         /// <summary>
-        /// 建筑不再复用车流统计。
-        /// 这里改成输出真实的建筑信息构成，包括地块尺寸、模型体量和子对象数量。
-        /// 这些数据都来自当前建筑实体或其 prefab，而不是道路上的交通对象。
+        /// 按对象组件类型把 traffic object 归到对应分类。
+        /// 这个分类逻辑被道路统计和建筑周边统计共同复用。
         /// </summary>
-        private void AnalyzeBuilding(Entity building)
+        private void ClassifyTrafficObject(Entity obj, ref TrafficCounters counters)
         {
-            int lotWidth = 0;
-            int lotDepth = 0;
-            int subObjectCount = EntityManager.HasBuffer<Game.Objects.SubObject>(building)
-                ? EntityManager.GetBuffer<Game.Objects.SubObject>(building).Length
-                : 0;
-            int prefabIndex = 0;
+            if (!EntityManager.Exists(obj))
+            {
+                return;
+            }
+
+            if (EntityManager.HasComponent<Human>(obj))
+            {
+                counters.Humans++;
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Bicycle>(obj))
+            {
+                counters.Bicycles++;
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Train>(obj))
+            {
+                counters.Trains++;
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Watercraft>(obj))
+            {
+                counters.Watercraft++;
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Aircraft>(obj) ||
+                EntityManager.HasComponent<Game.Vehicles.Airplane>(obj) ||
+                EntityManager.HasComponent<Game.Vehicles.Helicopter>(obj))
+            {
+                counters.Aircraft++;
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Car>(obj))
+            {
+                if (EntityManager.HasComponent<Game.Vehicles.PersonalCar>(obj))
+                {
+                    counters.PersonalCars++;
+                }
+                else if (EntityManager.HasComponent<Game.Vehicles.Taxi>(obj))
+                {
+                    counters.Taxis++;
+                }
+                else if (EntityManager.HasComponent<Game.Vehicles.CargoTransport>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.DeliveryTruck>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.GoodsDeliveryVehicle>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.PostVan>(obj))
+                {
+                    counters.Cargo++;
+                }
+                else if (EntityManager.HasComponent<Game.Vehicles.PublicTransport>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.PassengerTransport>(obj))
+                {
+                    counters.PublicTransport++;
+                }
+                else if (EntityManager.HasComponent<Game.Vehicles.Ambulance>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.FireEngine>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.GarbageTruck>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.Hearse>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.PoliceCar>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.RoadMaintenanceVehicle>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.MaintenanceVehicle>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.ParkMaintenanceVehicle>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.PrisonerTransport>(obj) ||
+                         EntityManager.HasComponent<Game.Vehicles.EvacuatingTransport>(obj))
+                {
+                    counters.CityService++;
+                }
+                else
+                {
+                    counters.OtherVehicles++;
+                }
+
+                return;
+            }
+
+            if (EntityManager.HasComponent<Game.Vehicles.Vehicle>(obj))
+            {
+                counters.OtherVehicles++;
+                return;
+            }
+
+            counters.Others++;
+        }
+
+        /// <summary>
+        /// 将后端统计结果转换成前端饼图数据。
+        /// 当总量为 0 时，也给一个“暂无流量”占位，避免面板完全消失导致误判为故障。
+        /// </summary>
+        private static TransitScopeSelectionStats BuildTrafficStats(string title, string subtitle, TrafficCounters counters)
+        {
+            TransitScopeSelectionStats stats = new()
+            {
+                Title = title,
+                Subtitle = subtitle,
+                Total = counters.Total
+            };
+
+            AddStat(stats, "Private Cars", counters.PersonalCars, "#5DB7FF");
+            AddStat(stats, "Taxis", counters.Taxis, "#6ECF88");
+            AddStat(stats, "Cargo", counters.Cargo, "#F2B35E");
+            AddStat(stats, "Public Transit", counters.PublicTransport, "#8B9BFF");
+            AddStat(stats, "City Service", counters.CityService, "#FF8A7A");
+            AddStat(stats, "Bicycles", counters.Bicycles, "#60D5C0");
+            AddStat(stats, "Rail", counters.Trains, "#C38BFF");
+            AddStat(stats, "Water", counters.Watercraft, "#4FC6F0");
+            AddStat(stats, "Air", counters.Aircraft, "#F28DDA");
+            AddStat(stats, "Pedestrians", counters.Humans, "#D6E2F0");
+            AddStat(stats, "Other Vehicles", counters.OtherVehicles, "#9AA7B6");
+            AddStat(stats, "Others", counters.Others, "#738195");
+
+            if (stats.Items.Count == 0)
+            {
+                AddStat(stats, "No Traffic", 1, "#7F8EA3");
+                stats.Total = 1;
+            }
+
+            return stats;
+        }
+
+        /// <summary>
+        /// 读取建筑中心位置。
+        /// 优先使用 Transform；这是判断“建筑附近交通”的基础。
+        /// </summary>
+        private bool TryGetBuildingCenter(Entity building, out float3 center)
+        {
+            center = float3.zero;
+
+            if (EntityManager.HasComponent<Transform>(building))
+            {
+                center = EntityManager.GetComponentData<Transform>(building).m_Position;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 估算建筑周边交通搜索半径。
+        /// 优先基于 prefab 的地块尺寸，再叠加一个基础缓冲值。
+        /// 这样小建筑不会扫太远，大建筑也不会只扫到门口那一小段路。
+        /// </summary>
+        private float EstimateBuildingTrafficSearchRadius(Entity building)
+        {
+            float radius = 32f;
 
             if (EntityManager.HasComponent<PrefabRefData>(building))
             {
                 PrefabRefData prefabRef = EntityManager.GetComponentData<PrefabRefData>(building);
-                prefabIndex = prefabRef.m_Prefab.Index;
+                Entity prefab = prefabRef.m_Prefab;
 
-                if (prefabRef.m_Prefab != Entity.Null && EntityManager.Exists(prefabRef.m_Prefab))
+                if (prefab != Entity.Null && EntityManager.Exists(prefab))
                 {
-                    if (EntityManager.HasComponent<BuildingExtensionData>(prefabRef.m_Prefab))
+                    if (EntityManager.HasComponent<BuildingExtensionData>(prefab))
                     {
-                        BuildingExtensionData ext = EntityManager.GetComponentData<BuildingExtensionData>(prefabRef.m_Prefab);
-                        lotWidth = ext.m_LotSize.x;
-                        lotDepth = ext.m_LotSize.y;
+                        BuildingExtensionData ext = EntityManager.GetComponentData<BuildingExtensionData>(prefab);
+                        radius = math.max(radius, math.max(ext.m_LotSize.x, ext.m_LotSize.y) * 10f);
                     }
-                    else if (EntityManager.HasComponent<BuildingData>(prefabRef.m_Prefab))
+                    else if (EntityManager.HasComponent<BuildingData>(prefab))
                     {
-                        BuildingData data = EntityManager.GetComponentData<BuildingData>(prefabRef.m_Prefab);
-                        lotWidth = data.m_LotSize.x;
-                        lotDepth = data.m_LotSize.y;
+                        BuildingData data = EntityManager.GetComponentData<BuildingData>(prefab);
+                        radius = math.max(radius, math.max(data.m_LotSize.x, data.m_LotSize.y) * 10f);
                     }
                 }
             }
 
-            int footprintArea = math.max(0, lotWidth * lotDepth);
-            int modelWidth = 0;
-            int modelDepth = 0;
-            int modelHeight = 0;
-
-            // 使用渲染包围盒近似读取建筑模型尺寸。
-            // 这是建筑本体几何信息，不是交通流量。
             if (EntityManager.HasComponent<CullingInfo>(building))
             {
                 CullingInfo cullingInfo = EntityManager.GetComponentData<CullingInfo>(building);
-                float3 size = cullingInfo.m_Bounds.max - cullingInfo.m_Bounds.min;
-                modelWidth = math.max(0, (int)math.round(size.x));
-                modelHeight = math.max(0, (int)math.round(size.y));
-                modelDepth = math.max(0, (int)math.round(size.z));
+                float3 boundsSize = cullingInfo.m_Bounds.max - cullingInfo.m_Bounds.min;
+                radius = math.max(radius, math.max(boundsSize.x, boundsSize.z) * 1.5f);
             }
 
-            TransitScopeSelectionStats stats = new()
-            {
-                Title = "建筑信息概览",
-                Subtitle = $"实体 #{building.Index}" + (prefabIndex > 0 ? $" · Prefab #{prefabIndex}" : string.Empty),
-                Total = 0
-            };
-
-            AddStat(stats, "占地面积", footprintArea, "#5DB7FF");
-            AddStat(stats, "模型高度", modelHeight, "#6ECF88");
-            AddStat(stats, "模型宽度", modelWidth, "#F2B35E");
-            AddStat(stats, "模型进深", modelDepth, "#8B9BFF");
-            AddStat(stats, "子对象", subObjectCount, "#FF8A7A");
-            AddStat(stats, "地块宽度", lotWidth, "#60D5C0");
-            AddStat(stats, "地块深度", lotDepth, "#C38BFF");
-
-            if (stats.Items.Count == 0)
-            {
-                AddStat(stats, "基础信息", 1, "#7F8EA3");
-            }
-
-            // 建筑总量按当前展示项目之和计算，方便前端直接计算占比。
-            int total = 0;
-            for (int i = 0; i < stats.Items.Count; i++)
-            {
-                total += stats.Items[i].Value;
-            }
-
-            stats.Total = math.max(1, total);
-            m_UISystem.PresentStats(stats);
+            return radius;
         }
 
         /// <summary>
-        /// 只把正数统计项加入饼图，避免图例里出现大量 0 值噪音。
+        /// 计算 Bezier 曲线在给定 t 位置的采样点。
+        /// 这里用 t=0.5 的中点近似判断一条边是否位于建筑附近，足够稳定且计算量低。
+        /// </summary>
+        private static float3 EvaluateBezier(Bezier4x3 bezier, float t)
+        {
+            float u = 1f - t;
+            float tt = t * t;
+            float uu = u * u;
+            float uuu = uu * u;
+            float ttt = tt * t;
+
+            return uuu * bezier.a +
+                   3f * uu * t * bezier.b +
+                   3f * u * tt * bezier.c +
+                   ttt * bezier.d;
+        }
+
+        /// <summary>
+        /// 只把正数统计项加入饼图，避免图例出现大量 0 值。
         /// </summary>
         private static void AddStat(TransitScopeSelectionStats stats, string label, int value, string color)
         {
