@@ -4,7 +4,6 @@ import { useValue } from "cs2/api";
 import { useLocalization } from "cs2/l10n";
 import { hasStatsBinding, isActiveBinding, statsJsonBinding } from "./bindings";
 
-/** 统计项数据接口 */
 interface StatItem {
     labelKey?: string;
     label: string;
@@ -12,7 +11,6 @@ interface StatItem {
     color: string;
 }
 
-/** 统计面板负载数据接口 */
 interface StatsPayload {
     titleKey?: string;
     title: string;
@@ -24,7 +22,6 @@ interface StatsPayload {
     items: StatItem[];
 }
 
-/** 锚点位置接口 */
 interface AnchorPosition {
     x: number;
     y: number;
@@ -34,31 +31,18 @@ interface Props {
     anchor: AnchorPosition | null;
 }
 
-/**
- * 重构后的统计面板组件。
- * 
- * 视觉优化点:
- * 1. 结构: 使用 Header + Body 的经典分层布局，增强专业感。
- * 2. 颜色: 深色背景 (rgba(24, 28, 33, 0.96)) 配合淡蓝色强调色 (accentColor)。
- * 3. 交互: 列表项支持 Hover 高亮，增强操作反馈。
- * 4. 图表: 优化 Conic-Gradient 计算，并在圆环中心增加立体感装饰。
- */
-export const TransitScopeStatsPanel = ({ anchor }: Props) => {
+export const ScopeStatsPanel = ({ anchor }: Props) => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
     const { translate } = useLocalization();
-    
-    // 当前悬停的统计项索引
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-    // 本地化辅助函数
     const localize = (key: string | undefined, fallback: string, arg?: string): string => {
         const template = key ? (translate(key, fallback) ?? fallback) : fallback;
         return arg !== undefined ? template.replace("{0}", arg) : template;
     };
 
-    // 状态检查
     if (!isActive || !hasStats || !statsJson || !anchor) {
         return null;
     }
@@ -67,7 +51,7 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
     try {
         payload = JSON.parse(statsJson) as StatsPayload;
     } catch (error) {
-        console.error("Transit Scope stats parse failed:", error);
+        console.error("Scope stats parse failed:", error);
         return null;
     }
 
@@ -75,7 +59,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
         return null;
     }
 
-    // 计算图表扇区
     const chartTotal = Math.max(1, payload.total || 0);
     const displayTotal = payload.displayTotal ?? payload.total ?? 0;
     let currentAngle = 0;
@@ -106,14 +89,12 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                     width: "580px",
                     borderRadius: "12px",
                     overflow: "hidden",
-                    // 渐变深色背景，模仿原版面板质感
                     background: "linear-gradient(145deg, rgba(32, 38, 45, 0.98) 0%, rgba(20, 24, 28, 0.98) 100%)",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                     boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.05)",
                     transition: "all 0.2s ease-in-out"
                 }}
             >
-                {/* 面板页眉 */}
                 <div
                     style={{
                         padding: "14px 20px",
@@ -151,7 +132,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                     </div>
                 </div>
 
-                {/* 内容区域: 图表 + 列表 */}
                 <div
                     style={{
                         padding: "24px 20px",
@@ -161,7 +141,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                         alignItems: "center"
                     }}
                 >
-                    {/* 左侧圆环图 */}
                     <div
                         style={{
                             position: "relative",
@@ -173,7 +152,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                             boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.4)"
                         }}
                     >
-                        {/* 彩色圆环 */}
                         <div
                             style={{
                                 width: "100%",
@@ -184,7 +162,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                                 transition: "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
                             }}
                         />
-                        {/* 中心数值区 */}
                         <div
                             style={{
                                 position: "absolute",
@@ -209,7 +186,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                         </div>
                     </div>
 
-                    {/* 右侧详细列表 */}
                     <div
                         style={{
                             display: "flex",
@@ -241,7 +217,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                                         cursor: "default"
                                     }}
                                 >
-                                    {/* 颜色指示器 */}
                                     <div
                                         style={{
                                             width: "8px",
@@ -252,7 +227,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                                             transition: "box-shadow 0.2s ease"
                                         }}
                                     />
-                                    {/* 标签名 */}
                                     <div
                                         style={{
                                             fontSize: "14px",
@@ -265,7 +239,6 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                                     >
                                         {localizedLabel}
                                     </div>
-                                    {/* 百分比数值 */}
                                     <div
                                         style={{
                                             fontSize: "14px",

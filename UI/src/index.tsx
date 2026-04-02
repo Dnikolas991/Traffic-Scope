@@ -1,8 +1,8 @@
 import { ModRegistrar } from "cs2/modding";
-import { TransitScopeButton } from "./TransitScopeButton";
+import { ScopeButton } from "./ScopeButton";
 
 const register: ModRegistrar = (moduleRegistry) => {
-    moduleRegistry.append("GameTopLeft", TransitScopeButton);
+    moduleRegistry.append("GameTopLeft", ScopeButton);
     console.log("Transit Scope UI mounted at GameTopLeft.");
 };
 

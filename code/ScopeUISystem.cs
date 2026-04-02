@@ -5,16 +5,20 @@ using Unity.Entities;
 namespace Transit_Scope.code
 {
     /// <summary>
-    /// 前后端 UI 绑定系统。
-    /// 除了工具开关外，现在还负责把统计结果推送给前端。
+    /// 管理后端与前端之间的绑定桥接。
+    /// 
+    /// 当前承担的职责非常明确：
+    /// 1. 控制 Transit Scope 模式是否开启。
+    /// 2. 将最新统计面板数据推送给前端。
+    /// 3. 在选择取消时及时清空前端显示状态。
     /// </summary>
-    public partial class TransitScopeUISystem : UISystemBase
+    public partial class ScopeUISystem : UISystemBase
     {
         private ValueBinding<bool> m_ActiveBinding;
         private ValueBinding<bool> m_HasStatsBinding;
         private ValueBinding<string> m_StatsJsonBinding;
 
-        private TransitScopeToolSystem m_TransitScopeToolSystem;
+        private ScopeToolSystem m_ScopeToolSystem;
 
         public bool IsActive => m_ActiveBinding.value;
 
@@ -22,7 +26,7 @@ namespace Transit_Scope.code
         {
             base.OnCreate();
 
-            m_TransitScopeToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
+            m_ScopeToolSystem = World.GetOrCreateSystemManaged<ScopeToolSystem>();
 
             AddBinding(m_ActiveBinding = new ValueBinding<bool>("transitScope", "isActive", false));
             AddBinding(m_HasStatsBinding = new ValueBinding<bool>("transitScope", "hasStats", false));
@@ -32,7 +36,7 @@ namespace Transit_Scope.code
             AddBinding(new TriggerBinding("transitScope", "confirm", OnConfirmSelection));
 
             SyncBindings();
-            Logger.Info("TransitScopeUISystem 已启动");
+            Logger.Info("ScopeUISystem 已启动，前后端绑定已建立。");
         }
 
         protected override void OnUpdate()
@@ -52,11 +56,11 @@ namespace Transit_Scope.code
 
             if (active)
             {
-                m_TransitScopeToolSystem.EnableSelectionMode();
+                m_ScopeToolSystem.EnableSelectionMode();
             }
             else
             {
-                m_TransitScopeToolSystem.DisableSelectionMode();
+                m_ScopeToolSystem.DisableSelectionMode();
                 ClearStats();
             }
 
@@ -70,21 +74,23 @@ namespace Transit_Scope.code
                 return;
             }
 
-            m_TransitScopeToolSystem.ConfirmHoveredTarget();
+            m_ScopeToolSystem.ConfirmHoveredTarget();
             SyncBindings();
         }
 
+        /// <summary>
+        /// 同步激活状态，并在没有选中对象时自动清空统计面板。
+        /// </summary>
         private void SyncBindings()
         {
-            if (m_TransitScopeToolSystem == null)
+            if (m_ScopeToolSystem == null)
             {
                 return;
             }
 
-            m_ActiveBinding.Update(m_TransitScopeToolSystem.IsSelecting);
+            m_ActiveBinding.Update(m_ScopeToolSystem.IsSelecting);
 
-            // 当用户取消当前选中对象时，图表也要一起清空。
-            if (m_TransitScopeToolSystem.SelectedEntity == Entity.Null && m_HasStatsBinding.value)
+            if (m_ScopeToolSystem.SelectedEntity == Entity.Null && m_HasStatsBinding.value)
             {
                 ClearStats();
             }
@@ -92,9 +98,8 @@ namespace Transit_Scope.code
 
         /// <summary>
         /// 向前端推送新的统计卡片数据。
-        /// 这里绑定 JSON 字符串，避免复杂对象绑定在不同版本里出现兼容问题。
         /// </summary>
-        internal void PresentStats(TransitScopeSelectionStats stats)
+        internal void PresentStats(ScopeSelectionStats stats)
         {
             if (stats == null)
             {
@@ -107,7 +112,7 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 清空当前统计展示。
+        /// 清空当前统计显示。
         /// </summary>
         internal void ClearStats()
         {

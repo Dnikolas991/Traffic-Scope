@@ -9,7 +9,13 @@ using UnityEngine.InputSystem;
 
 namespace Transit_Scope.code
 {
-    public partial class TransitScopeToolSystem : ToolBaseSystem
+    /// <summary>
+    /// Transit Scope 自定义选择工具。
+    /// 
+    /// 该工具只做一件事：把玩家当前 Hover / Confirm 的对象
+    /// 统一解析成“道路边”或“建筑”这两类业务对象，并把选择状态暴露给其他系统。
+    /// </summary>
+    public partial class ScopeToolSystem : ToolBaseSystem
     {
         public enum State
         {
@@ -33,19 +39,28 @@ namespace Transit_Scope.code
         public Entity SelectedEntity { get; private set; } = Entity.Null;
         public SelectionKind SelectedKind { get; private set; } = SelectionKind.None;
 
+        /// <summary>
+        /// 用于通知统计系统“这次选择刚刚发生变化，需要立即刷新”。
+        /// </summary>
         public bool HasNewSelection { get; private set; }
+
         public bool IsSelecting => m_State == State.Selecting;
+
+        /// <summary>
+        /// 当 Hover 对象和已确认对象一致时，不再重复绘制 Hover 高亮。
+        /// </summary>
         public bool HasConfirmedHoveredTarget =>
             SelectedEntity != Entity.Null &&
             SelectedEntity == HoveredEntity &&
             SelectedKind == HoveredKind;
+
         public bool ShouldRenderHoverOverlay =>
             IsSelecting &&
             HoveredEntity != Entity.Null &&
             HoveredKind != SelectionKind.None &&
             !HasConfirmedHoveredTarget;
 
-        public override string toolID => "TransitScopeTool";
+        public override string toolID => "ScopeTool";
 
         protected override void OnCreate()
         {
@@ -62,7 +77,7 @@ namespace Transit_Scope.code
             m_State = State.Selecting;
             ResetState();
             UpdateNativeSelectionMarker();
-            Logger.Info("TransitScopeTool 已开启");
+            Logger.Info("ScopeTool 已开启。");
         }
 
         protected override void OnStopRunning()
@@ -72,7 +87,7 @@ namespace Transit_Scope.code
             m_State = State.Default;
             ResetState();
             UpdateNativeSelectionMarker();
-            Logger.Info("TransitScopeTool 已关闭");
+            Logger.Info("ScopeTool 已关闭。");
         }
 
         public override PrefabBase GetPrefab()
@@ -121,6 +136,10 @@ namespace Transit_Scope.code
             UpdateNativeSelectionMarker();
         }
 
+        /// <summary>
+        /// 确认当前 Hover 对象。
+        /// 如果再次点击同一对象，则视为取消选择。
+        /// </summary>
         public void ConfirmHoveredTarget()
         {
             if (!IsValidSelection(HoveredEntity, HoveredKind))
@@ -133,7 +152,7 @@ namespace Transit_Scope.code
                 SelectedKind == HoveredKind)
             {
                 ClearSelectionInternal();
-                Logger.Info("已取消当前锁定");
+                Logger.Info("已取消当前锁定对象。");
                 return;
             }
 
@@ -145,7 +164,7 @@ namespace Transit_Scope.code
 
             if (SelectedKind == SelectionKind.Road)
             {
-                Logger.Info($"已锁定道路/轨道 #{SelectedEntity.Index}");
+                Logger.Info($"已锁定道路或轨道 #{SelectedEntity.Index}");
             }
             else if (SelectedKind == SelectionKind.Building)
             {
@@ -170,7 +189,7 @@ namespace Transit_Scope.code
             m_ToolRaycastSystem.collisionMask =
                 CollisionMask.OnGround | CollisionMask.Overground | CollisionMask.Underground;
 
-            // 综合选择模式同时允许命中 Net 和建筑类静态对象。
+            // 同时允许命中道路网络和静态物体，满足道路/建筑混合选择需求。
             m_ToolRaycastSystem.typeMask = TypeMask.Net | TypeMask.StaticObjects;
 
             m_ToolRaycastSystem.raycastFlags =
@@ -179,7 +198,7 @@ namespace Transit_Scope.code
                 RaycastFlags.Passenger |
                 RaycastFlags.EditorContainers;
 
-            // 参考 Move It，补上 TrainTrack / SubwayTrack，使铁路和地铁可选。
+            // 补充轨道相关层，保证铁路、地铁、有轨电车都可以被命中。
             m_ToolRaycastSystem.netLayerMask =
                 Layer.Road |
                 Layer.PublicTransportRoad |
@@ -205,7 +224,6 @@ namespace Transit_Scope.code
             }
 
             HasNewSelection = false;
-
             UpdateHoveredTarget();
 
             if (SelectedEntity != Entity.Null && !EntityManager.Exists(SelectedEntity))
@@ -215,16 +233,12 @@ namespace Transit_Scope.code
 
             UpdateNativeSelectionMarker();
 
-            if (CanAcceptSceneClick() &&
-                Mouse.current != null &&
-                Mouse.current.leftButton.wasPressedThisFrame)
+            if (CanAcceptSceneClick() && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 ConfirmHoveredTarget();
             }
 
-            if (CanAcceptSceneClick() &&
-                Mouse.current != null &&
-                Mouse.current.rightButton.wasPressedThisFrame)
+            if (CanAcceptSceneClick() && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
             {
                 ClearSelectionInternal();
             }
@@ -248,7 +262,8 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 只把“已确认锁定”的对象写给原生 selected
+        /// 只把已经确认的对象写回原版 selected 标记。
+        /// Hover 对象不应污染原版选中状态。
         /// </summary>
         private void UpdateNativeSelectionMarker()
         {
@@ -275,6 +290,10 @@ namespace Transit_Scope.code
             UpdateNativeSelectionMarker();
         }
 
+        /// <summary>
+        /// 每帧更新 Hover 对象。
+        /// 优先解析道路，解析失败后再尝试解析建筑。
+        /// </summary>
         private void UpdateHoveredTarget()
         {
             HoveredEntity = Entity.Null;
@@ -285,19 +304,18 @@ namespace Transit_Scope.code
                 return;
             }
 
-            // 综合模式下优先尝试解析 Net；命中不到再退回建筑。
-            Entity net = ResolveRoadEdge(hitEntity);
-            if (IsValidRoad(net))
+            Entity roadEntity = ScopeEntityResolver.ResolveRoadEdge(EntityManager, hitEntity);
+            if (ScopeEntityResolver.IsRoad(EntityManager, roadEntity))
             {
-                HoveredEntity = net;
+                HoveredEntity = roadEntity;
                 HoveredKind = SelectionKind.Road;
                 return;
             }
 
-            Entity building = ResolveBuildingEntity(hitEntity);
-            if (IsValidBuilding(building))
+            Entity buildingEntity = ScopeEntityResolver.ResolveBuildingEntity(EntityManager, hitEntity);
+            if (ScopeEntityResolver.IsBuilding(EntityManager, buildingEntity))
             {
-                HoveredEntity = building;
+                HoveredEntity = buildingEntity;
                 HoveredKind = SelectionKind.Building;
             }
         }
@@ -306,147 +324,10 @@ namespace Transit_Scope.code
         {
             return kind switch
             {
-                SelectionKind.Road => IsValidRoad(entity),
-                SelectionKind.Building => IsValidBuilding(entity),
+                SelectionKind.Road => ScopeEntityResolver.IsRoad(EntityManager, entity),
+                SelectionKind.Building => ScopeEntityResolver.IsBuilding(EntityManager, entity),
                 _ => false
             };
-        }
-
-        private bool IsValidRoad(Entity entity)
-        {
-            if (entity == Entity.Null)
-            {
-                return false;
-            }
-
-            if (!EntityManager.Exists(entity))
-            {
-                return false;
-            }
-
-            return EntityManager.HasComponent<Edge>(entity);
-        }
-
-        private bool IsValidBuilding(Entity entity)
-        {
-            if (entity == Entity.Null)
-            {
-                return false;
-            }
-
-            if (!EntityManager.Exists(entity))
-            {
-                return false;
-            }
-
-            if (EntityManager.HasComponent<Edge>(entity))
-            {
-                return false;
-            }
-
-            return EntityManager.HasComponent<PrefabRef>(entity) &&
-                   (EntityManager.HasComponent<Game.Buildings.Building>(entity) ||
-                    EntityManager.HasComponent<Game.Objects.Transform>(entity));
-        }
-
-        private Entity ResolveRoadEdge(Entity entity)
-        {
-            if (entity == Entity.Null || !EntityManager.Exists(entity))
-            {
-                return Entity.Null;
-            }
-
-            if (EntityManager.HasComponent<Edge>(entity))
-            {
-                return entity;
-            }
-
-            if (EntityManager.HasComponent<Owner>(entity))
-            {
-                Owner owner = EntityManager.GetComponentData<Owner>(entity);
-
-                if (owner.m_Owner != Entity.Null &&
-                    EntityManager.Exists(owner.m_Owner) &&
-                    EntityManager.HasComponent<Edge>(owner.m_Owner))
-                {
-                    return owner.m_Owner;
-                }
-            }
-
-            if (EntityManager.HasComponent<Temp>(entity))
-            {
-                Temp temp = EntityManager.GetComponentData<Temp>(entity);
-
-                if (temp.m_Original != Entity.Null && EntityManager.Exists(temp.m_Original))
-                {
-                    if (EntityManager.HasComponent<Edge>(temp.m_Original))
-                    {
-                        return temp.m_Original;
-                    }
-
-                    if (EntityManager.HasComponent<Owner>(temp.m_Original))
-                    {
-                        Owner owner = EntityManager.GetComponentData<Owner>(temp.m_Original);
-
-                        if (owner.m_Owner != Entity.Null &&
-                            EntityManager.Exists(owner.m_Owner) &&
-                            EntityManager.HasComponent<Edge>(owner.m_Owner))
-                        {
-                            return owner.m_Owner;
-                        }
-                    }
-                }
-            }
-
-            return Entity.Null;
-        }
-
-        private Entity ResolveBuildingEntity(Entity entity)
-        {
-            if (entity == Entity.Null || !EntityManager.Exists(entity))
-            {
-                return Entity.Null;
-            }
-
-            Entity current = entity;
-
-            for (int i = 0; i < 8; i++)
-            {
-                if (!EntityManager.HasComponent<Owner>(current))
-                {
-                    break;
-                }
-
-                Owner owner = EntityManager.GetComponentData<Owner>(current);
-
-                if (owner.m_Owner == Entity.Null || !EntityManager.Exists(owner.m_Owner))
-                {
-                    break;
-                }
-
-                current = owner.m_Owner;
-            }
-
-            if (IsValidBuilding(current))
-            {
-                return current;
-            }
-
-            if (IsValidBuilding(entity))
-            {
-                return entity;
-            }
-
-            if (EntityManager.HasComponent<Temp>(entity))
-            {
-                Temp temp = EntityManager.GetComponentData<Temp>(entity);
-                if (temp.m_Original != Entity.Null && IsValidBuilding(temp.m_Original))
-                {
-                    return temp.m_Original;
-                }
-            }
-
-            return Entity.Null;
         }
     }
 }

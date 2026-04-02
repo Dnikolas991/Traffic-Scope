@@ -5,11 +5,40 @@
 
         <!--The file where mod information which is required for publishing mod on PDX mods are stored-->
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+
+        <!--
+        Prefer the user-scoped modding toolchain path, but fall back to the current
+        process environment and the default Cities: Skylines II cache path so CLI
+        builds still work when the user variable is not populated.
+        -->
+        <CsiiToolPath>$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))</CsiiToolPath>
+        <CsiiToolPath Condition="'$(CsiiToolPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH'))</CsiiToolPath>
+        <CsiiToolPath Condition="'$(CsiiToolPath)' == ''">$([System.IO.Path]::Combine($([System.Environment]::GetFolderPath('UserProfile')), 'AppData', 'LocalLow', 'Colossal Order', 'Cities Skylines II', '.cache', 'Modding'))</CsiiToolPath>
+        <RunGameToolchainTargets Condition="'$(RunGameToolchainTargets)' == ''">false</RunGameToolchainTargets>
     </PropertyGroup>
 
     <!--Imports must be after PropertyGroup block-->
-    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.props"/>
-    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets"/>
+    <Import Project="$(CsiiToolPath)\Mod.props"/>
+    <Import Project="$(CsiiToolPath)\Mod.targets"/>
+
+    <PropertyGroup>
+        <CsiiInstallationPath>$([System.Environment]::GetEnvironmentVariable('CSII_INSTALLATIONPATH'))</CsiiInstallationPath>
+
+        <ManagedPath Condition="'$(ManagedPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_MANAGEDPATH'))</ManagedPath>
+        <ManagedPath Condition="'$(ManagedPath)' == '' AND '$(CsiiInstallationPath)' != ''">$([System.IO.Path]::Combine('$(CsiiInstallationPath)', 'Cities2_Data', 'Managed'))</ManagedPath>
+
+        <UserDataPath Condition="'$(UserDataPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_USERDATAPATH'))</UserDataPath>
+        <LocalModsPath Condition="'$(LocalModsPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_LOCALMODSPATH'))</LocalModsPath>
+        <UnityModProjectPath Condition="'$(UnityModProjectPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_UNITYMODPROJECTPATH'))</UnityModProjectPath>
+        <ModPostProcessorPath Condition="'$(ModPostProcessorPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_MODPOSTPROCESSORPATH'))</ModPostProcessorPath>
+        <ModPublisherPath Condition="'$(ModPublisherPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_MODPUBLISHERPATH'))</ModPublisherPath>
+        <EntitiesVersion Condition="'$(EntitiesVersion)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_ENTITIESVERSION'))</EntitiesVersion>
+        <AssemblySearchPathsEnv Condition="'$(AssemblySearchPathsEnv)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_ASSEMBLYSEARCHPATH'))</AssemblySearchPathsEnv>
+        <MSCORLIBPath Condition="'$(MSCORLIBPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_MSCORLIBPATH'))</MSCORLIBPath>
+
+        <EntityPackagePath Condition="'$(UnityModProjectPath)' != '' AND '$(EntitiesVersion)' != ''">$(UnityModProjectPath)\Library\PackageCache\com.unity.entities@$(EntitiesVersion)\Unity.Entities\SourceGenerators</EntityPackagePath>
+        <AssemblySearchPaths>$(AssemblySearchPaths);$(ManagedPath);$(UserAssemblySearchPaths)</AssemblySearchPaths>
+    </PropertyGroup>
 
     <ItemGroup>
         <Reference Include="Game">
@@ -56,7 +85,7 @@
             <Private>false</Private>
         </Reference>
         <Reference Include="Unity.InputSystem">
-            <HintPath>..\Cities2_Data\Managed\Unity.InputSystem.dll</HintPath>
+            <HintPath>$(ManagedPath)\Unity.InputSystem.dll</HintPath>
         </Reference>
     </ItemGroup>
 
@@ -88,6 +117,21 @@
 
     <Target Name="BuildUI" AfterTargets="AfterBuild">
         <Exec Command="npm run build" WorkingDirectory="$(ProjectDir)/UI" />
+    </Target>
+
+    <Target Name="RunModPostProcessor" AfterTargets="AfterBuild" Condition="'$(RunGameToolchainTargets)' == 'true' AND '$(NeedBuild)'">
+        <Error Condition="!Exists('$(ModPostProcessorFullPath)')" Text="Post processor not found, please check the path: $(ModPostProcessorFullPath)" />
+        <Message Text="Run post processor: $(ModPostProcessorArgs)" Importance="high" />
+        <Exec Command="$(ModPostProcessorArgs)" LogStandardErrorAsError="true" />
+    </Target>
+
+    <Target Name="DeployWIP" AfterTargets="AfterBuild" Condition="'$(RunGameToolchainTargets)' == 'true' AND '$(NeedBuild)'">
+        <ItemGroup>
+            <FilesToDeploy Include="$(OutDir)\**\*.*" />
+        </ItemGroup>
+        <Message Text="Copy output to deploy directory $(DeployDir)" Importance="high" />
+        <RemoveDir Directories="$(DeployDir)" />
+        <Copy SourceFiles="@(FilesToDeploy)" DestinationFiles="@(FilesToDeploy->'$(DeployDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
     </Target>
 
 </Project>
