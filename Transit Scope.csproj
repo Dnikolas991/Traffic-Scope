@@ -79,8 +79,7 @@
 
     <ItemGroup>
         <!--
-        按 CS2 本地化目录结构把 lang 文件随模组一起输出。
-        即便当前前端已自行消费这些 JSON，打包到模组目录后也更符合官方推荐的资源组织方式。
+        将本地化字典保留在 lang 目录，供 I18n EveryWhere 之类的本地化依赖按约定加载。
         -->
         <None Include="lang\**\*.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

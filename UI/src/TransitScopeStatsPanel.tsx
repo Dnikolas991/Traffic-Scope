@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { Portal } from "cs2/ui";
 import { useValue } from "cs2/api";
+import { useLocalization } from "cs2/l10n";
 import { hasStatsBinding, isActiveBinding, statsJsonBinding } from "./bindings";
-import { translate } from "./localization";
 
+/** 统计项数据接口 */
 interface StatItem {
     labelKey?: string;
     label: string;
@@ -11,6 +12,7 @@ interface StatItem {
     color: string;
 }
 
+/** 统计面板负载数据接口 */
 interface StatsPayload {
     titleKey?: string;
     title: string;
@@ -22,6 +24,7 @@ interface StatsPayload {
     items: StatItem[];
 }
 
+/** 锚点位置接口 */
 interface AnchorPosition {
     x: number;
     y: number;
@@ -32,20 +35,35 @@ interface Props {
 }
 
 /**
- * 统计面板使用 Portal 浮层挂载。
- * 排版保持当前用户认可的结构，只补本地化与 total 展示修正。
+ * 重构后的统计面板组件。
+ * 
+ * 视觉优化点:
+ * 1. 结构: 使用 Header + Body 的经典分层布局，增强专业感。
+ * 2. 颜色: 深色背景 (rgba(24, 28, 33, 0.96)) 配合淡蓝色强调色 (accentColor)。
+ * 3. 交互: 列表项支持 Hover 高亮，增强操作反馈。
+ * 4. 图表: 优化 Conic-Gradient 计算，并在圆环中心增加立体感装饰。
  */
 export const TransitScopeStatsPanel = ({ anchor }: Props) => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
+    const { translate } = useLocalization();
+    
+    // 当前悬停的统计项索引
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+    // 本地化辅助函数
+    const localize = (key: string | undefined, fallback: string, arg?: string): string => {
+        const template = key ? (translate(key, fallback) ?? fallback) : fallback;
+        return arg !== undefined ? template.replace("{0}", arg) : template;
+    };
+
+    // 状态检查
     if (!isActive || !hasStats || !statsJson || !anchor) {
         return null;
     }
 
     let payload: StatsPayload | null = null;
-
     try {
         payload = JSON.parse(statsJson) as StatsPayload;
     } catch (error) {
@@ -57,8 +75,7 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
         return null;
     }
 
-    // total 负责图表扇区计算，displayTotal 专门负责中心展示。
-    // 没有流量时 total 仍可能为 1（占位扇区），但中心数值应显示 0。
+    // 计算图表扇区
     const chartTotal = Math.max(1, payload.total || 0);
     const displayTotal = payload.displayTotal ?? payload.total ?? 0;
     let currentAngle = 0;
@@ -75,8 +92,8 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
         background: `conic-gradient(${segments.join(", ")})`
     } as React.CSSProperties;
 
-    const localizedTitle = translate(payload.titleKey, payload.title);
-    const localizedSubtitle = translate(payload.subtitleKey, payload.subtitle, payload.subtitleArg);
+    const localizedTitle = localize(payload.titleKey, payload.title);
+    const localizedSubtitle = localize(payload.subtitleKey, payload.subtitle, payload.subtitleArg);
 
     return (
         <Portal>
@@ -85,31 +102,36 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                     position: "absolute",
                     top: `${anchor.y}px`,
                     left: `${anchor.x}px`,
-                    pointerEvents: "none",
-                    width: "560px",
-                    borderRadius: "16px",
+                    pointerEvents: "auto",
+                    width: "580px",
+                    borderRadius: "12px",
                     overflow: "hidden",
-                    backgroundColor: "rgba(80,80,80,0.94)",
-                    boxShadow: "0 8px 20px rgba(0,0,0,0.28)"
+                    // 渐变深色背景，模仿原版面板质感
+                    background: "linear-gradient(145deg, rgba(32, 38, 45, 0.98) 0%, rgba(20, 24, 28, 0.98) 100%)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.05)",
+                    transition: "all 0.2s ease-in-out"
                 }}
             >
+                {/* 面板页眉 */}
                 <div
                     style={{
+                        padding: "14px 20px",
+                        background: "rgba(0, 0, 0, 0.25)",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "baseline",
                         justifyContent: "space-between",
-                        gap: "12px",
-                        padding: "12px 16px",
-                        backgroundColor: "rgba(36,36,36,0.98)",
-                        color: "var(--accentColorNormal, #8fd5ff)"
+                        gap: "16px"
                     }}
                 >
                     <div
                         style={{
-                            fontSize: "15px",
-                            fontWeight: 700,
-                            letterSpacing: "0.6px",
-                            textTransform: "uppercase"
+                            fontSize: "16px",
+                            fontWeight: 800,
+                            color: "var(--accentColorNormal, #8fd5ff)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.8px"
                         }}
                     >
                         {localizedTitle}
@@ -117,7 +139,9 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                     <div
                         style={{
                             fontSize: "13px",
-                            color: "rgba(255,255,255,0.74)",
+                            fontWeight: 500,
+                            color: "rgba(255, 255, 255, 0.55)",
+                            fontStyle: "italic",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis"
@@ -127,86 +151,113 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                     </div>
                 </div>
 
+                {/* 内容区域: 图表 + 列表 */}
                 <div
                     style={{
-                        padding: "16px",
+                        padding: "24px 20px",
                         display: "grid",
-                        gridTemplateColumns: "190px minmax(0, 1fr)",
-                        columnGap: "18px",
+                        gridTemplateColumns: "200px 1fr",
+                        columnGap: "24px",
                         alignItems: "center"
                     }}
                 >
+                    {/* 左侧圆环图 */}
                     <div
                         style={{
                             position: "relative",
-                            width: "176px",
-                            height: "176px",
-                            borderRadius: "999px",
-                            justifySelf: "center",
-                            ...pieStyle
+                            width: "180px",
+                            height: "180px",
+                            borderRadius: "50%",
+                            padding: "4px",
+                            background: "rgba(0, 0, 0, 0.3)",
+                            boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.4)"
                         }}
                     >
+                        {/* 彩色圆环 */}
+                        <div
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "50%",
+                                ...pieStyle,
+                                transform: hoveredIndex !== null ? "scale(1.02)" : "scale(1)",
+                                transition: "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+                            }}
+                        />
+                        {/* 中心数值区 */}
                         <div
                             style={{
                                 position: "absolute",
-                                inset: "30px",
-                                borderRadius: "999px",
-                                background: "rgba(15,16,19,0.98)",
-                                border: "1px solid rgba(255,255,255,0.08)",
+                                inset: "34px",
+                                borderRadius: "50%",
+                                background: "linear-gradient(135deg, #1a1f26 0%, #0d1014 100%)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
-                                justifyContent: "center"
+                                justifyContent: "center",
+                                zIndex: 2
                             }}
                         >
-                            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                {translate("stats.total", "Total")}
+                            <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.45)", fontWeight: 600 }}>
+                                {localize("stats.total", "TOTAL")}
                             </div>
-                            <div style={{ marginTop: "4px", fontSize: "30px", fontWeight: 700, color: "#FFFFFF" }}>
+                            <div style={{ fontSize: "32px", fontWeight: 800, color: "#FFFFFF", textShadow: "0 0 12px rgba(255,255,255,0.1)" }}>
                                 {displayTotal}
                             </div>
                         </div>
                     </div>
 
+                    {/* 右侧详细列表 */}
                     <div
                         style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                            gap: "10px 12px",
-                            minWidth: 0
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px"
                         }}
                     >
-                        {payload.items.map((item) => {
+                        {payload.items.map((item, index) => {
                             const percent = ((item.value / chartTotal) * 100).toFixed(1);
-                            const localizedLabel = translate(item.labelKey, item.label);
+                            const localizedLabel = localize(item.labelKey, item.label);
+                            const isHovered = hoveredIndex === index;
 
                             return (
                                 <div
                                     key={`${item.labelKey || item.label}-${item.color}`}
+                                    onMouseEnter={() => setHoveredIndex(index)}
+                                    onMouseLeave={() => setHoveredIndex(null)}
                                     style={{
                                         display: "grid",
-                                        gridTemplateColumns: "12px minmax(0, 1fr) auto",
+                                        gridTemplateColumns: "12px 1fr auto",
                                         alignItems: "center",
-                                        columnGap: "8px",
-                                        minWidth: 0,
-                                        padding: "8px 10px",
-                                        borderRadius: "10px",
-                                        backgroundColor: "rgba(15,16,19,0.60)"
+                                        columnGap: "12px",
+                                        padding: "10px 14px",
+                                        borderRadius: "8px",
+                                        background: isHovered ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
+                                        border: "1px solid",
+                                        borderColor: isHovered ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                                        transition: "all 0.15s ease",
+                                        cursor: "default"
                                     }}
                                 >
+                                    {/* 颜色指示器 */}
                                     <div
                                         style={{
-                                            width: "10px",
-                                            height: "10px",
-                                            borderRadius: "999px",
-                                            background: item.color
+                                            width: "8px",
+                                            height: "8px",
+                                            borderRadius: "50%",
+                                            background: item.color,
+                                            boxShadow: isHovered ? `0 0 8px ${item.color}` : "none",
+                                            transition: "box-shadow 0.2s ease"
                                         }}
                                     />
+                                    {/* 标签名 */}
                                     <div
                                         style={{
-                                            minWidth: 0,
-                                            fontSize: "15px",
-                                            color: "#FFFFFF",
+                                            fontSize: "14px",
+                                            fontWeight: 500,
+                                            color: isHovered ? "#FFFFFF" : "rgba(255, 255, 255, 0.85)",
                                             whiteSpace: "nowrap",
                                             overflow: "hidden",
                                             textOverflow: "ellipsis"
@@ -214,7 +265,18 @@ export const TransitScopeStatsPanel = ({ anchor }: Props) => {
                                     >
                                         {localizedLabel}
                                     </div>
-                                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#FFFFFF" }}>{percent}%</div>
+                                    {/* 百分比数值 */}
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            fontWeight: 700,
+                                            color: isHovered ? "var(--accentColorNormal, #8fd5ff)" : "#FFFFFF",
+                                            minWidth: "45px",
+                                            textAlign: "right"
+                                        }}
+                                    >
+                                        {percent}%
+                                    </div>
                                 </div>
                             );
                         })}

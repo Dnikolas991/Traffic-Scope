@@ -17,5 +17,10 @@ namespace Transit_Scope
         {
             _log.Error(message);
         }
+        
+        public static void Warning(string message) 
+        {
+            _log.Warn(message);
+        }
     }
 }

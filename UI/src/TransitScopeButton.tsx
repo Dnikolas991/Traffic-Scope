@@ -1,30 +1,39 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { useValue } from "cs2/api";
+import { Button } from "cs2/ui";
 import { hasStatsBinding, isActiveBinding, toggleTransitScope } from "./bindings";
 import { TransitScopeIcon } from "./TransitScopeIcon";
 import { TransitScopeStatsPanel } from "./TransitScopeStatsPanel";
 
+/** 锚点位置接口，用于定位浮动面板 */
 interface AnchorPosition {
     x: number;
     y: number;
 }
 
 /**
- * 左上角入口按钮。
- * 这里参考 Traffic 的挂载方式，保留入口按钮挂在 GameTopLeft，
- * 但把统计面板改成基于按钮位置的浮层锚定，而不是继续放在普通文档流里。
- * 这样按钮不会被面板顶歪，整体位置也更接近原版工具入口。
+ * Transit Scope 的主入口按钮组件。
+ * 
+ * 设计参考: 
+ * 1. 挂载于 GameTopLeft，与原版及 Traffic 模组对齐。
+ * 2. 使用 cs2/ui 的 Button 组件，variant="floating" 以获得原版悬浮质感。
+ * 3. 统计面板通过 Portal 渲染，并根据按钮位置实时计算锚点，避免 UI 遮挡。
  */
 export const TransitScopeButton = () => {
+    // 绑定游戏状态：是否激活，以及是否有统计数据需要展示
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
+    
+    // 引用容器以计算位置
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [anchor, setAnchor] = useState<AnchorPosition | null>(null);
 
+    // 切换模组激活状态
     const handleToggle = () => {
         toggleTransitScope(!isActive);
     };
 
+    // 动态更新面板锚点位置
     useLayoutEffect(() => {
         const updateAnchor = () => {
             if (!containerRef.current) {
@@ -33,6 +42,7 @@ export const TransitScopeButton = () => {
             }
 
             const rect = containerRef.current.getBoundingClientRect();
+            // 将面板定位在按钮下方，并留出 8px 间距
             setAnchor({
                 x: rect.left,
                 y: rect.bottom + 8
@@ -46,41 +56,35 @@ export const TransitScopeButton = () => {
 
     return (
         <>
+            {/* 按钮容器 */}
             <div
                 ref={containerRef}
                 style={{
                     pointerEvents: "auto",
-                    margin: "6px 8px 0",
+                    margin: "4px 8px",
                     position: "relative"
                 }}
             >
-                <button
-                    onClick={handleToggle}
-                    title="Transit Scope"
+                {/* 
+                  * 使用原版 UI 组件 Button。
+                  * variant="floating" 提供标准的阴影和背景。
+                  * selected 属性对应选中时的高亮样式（与 Traffic 一致）。
+                  */}
+                <Button
+                    variant="floating"
+                    selected={isActive}
+                    onSelect={handleToggle}
+                    tooltipLabel="Transit Scope"
                     style={{
                         width: "56px",
-                        height: "56px",
-                        borderRadius: "14px",
-                        border: isActive
-                            ? "1px solid rgba(235,248,255,0.88)"
-                            : "1px solid rgba(122,155,175,0.82)",
-                        background: isActive
-                            ? "linear-gradient(180deg, rgba(116,194,231,0.98) 0%, rgba(78,149,184,0.98) 100%)"
-                            : "linear-gradient(180deg, rgba(98,170,204,0.94) 0%, rgba(67,122,150,0.96) 100%)",
-                        boxShadow: isActive
-                            ? "inset 0 1px 0 rgba(255,255,255,0.32), 0 4px 12px rgba(0,0,0,0.28)"
-                            : "inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 10px rgba(0,0,0,0.24)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        padding: 0
+                        height: "56px"
                     }}
                 >
                     <TransitScopeIcon active={isActive} />
-                </button>
+                </Button>
             </div>
 
+            {/* 统计数据浮层 */}
             <TransitScopeStatsPanel anchor={anchor} />
         </>
     );
