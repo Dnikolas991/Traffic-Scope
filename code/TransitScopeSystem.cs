@@ -16,46 +16,16 @@ namespace Transit_Scope.code
 {
     /// <summary>
     /// 负责在玩家确认选中对象后做统计分析，并把结果推给前端图形化展示。
-    /// 这里统一输出“交通流量构成”：
-    /// 1. 选中道路/轨道时，统计该边上的 traffic objects。
-    /// 2. 选中建筑时，统计建筑周边一定范围内道路/轨道上的 traffic objects。
-    /// 同时只发送本地化键和少量参数给前端，真正的翻译由前端按当前语言完成。
+    /// 
+    /// 本次重构严格对齐原版交通线路口径：
+    /// 1. 道路统计 = 当前在该路段上的流量 (OnRouteNow) + 路径规划中即将经过的流量 (PlannedToPass)。
+    /// 2. 建筑统计 = 目标设定为该建筑的流入量 (Destination Inflow)。
     /// </summary>
     public partial class TransitScopeSystem : GameSystemBase
     {
-        private struct TrafficCounters
-        {
-            public int PersonalCars;
-            public int Taxis;
-            public int Cargo;
-            public int PublicTransport;
-            public int CityService;
-            public int Bicycles;
-            public int Trains;
-            public int Watercraft;
-            public int Aircraft;
-            public int Humans;
-            public int OtherVehicles;
-            public int Others;
-
-            public int Total =>
-                PersonalCars +
-                Taxis +
-                Cargo +
-                PublicTransport +
-                CityService +
-                Bicycles +
-                Trains +
-                Watercraft +
-                Aircraft +
-                Humans +
-                OtherVehicles +
-                Others;
-        }
-
         private TransitScopeToolSystem m_ToolSystem;
         private TransitScopeUISystem m_UISystem;
-        private EntityQuery m_TrafficEdgeQuery;
+        private TransitScopeTrafficFlowSystem m_FlowSystem;
 
         protected override void OnCreate()
         {
@@ -63,14 +33,9 @@ namespace Transit_Scope.code
 
             m_ToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
             m_UISystem = World.GetOrCreateSystemManaged<TransitScopeUISystem>();
+            m_FlowSystem = World.GetOrCreateSystemManaged<TransitScopeTrafficFlowSystem>();
 
-            // 只在确认选中建筑后使用，用于扫描建筑周边道路/轨道边。
-            m_TrafficEdgeQuery = GetEntityQuery(
-                ComponentType.ReadOnly<Edge>(),
-                ComponentType.ReadOnly<Curve>(),
-                ComponentType.ReadOnly<NetSubLane>());
-
-            Logger.Info("TransitScopeSystem 启动");
+            Logger.Info("TransitScopeSystem 启动，已对接全图流量缓存系统");
         }
 
         protected override void OnUpdate()
@@ -111,7 +76,16 @@ namespace Transit_Scope.code
             }
 
             TrafficCounters counters = default;
+            
+            // 1. OnRouteNow: 当前物理位置正在该道路上的实体
             AccumulateTrafficFromEdge(selectedEdge, ref counters);
+
+            // 2. PlannedToPass: 路径规划中未来将要经过该道路的实体（从缓存读取）
+            if (m_FlowSystem.PlannedFlowCache.IsCreated && 
+                m_FlowSystem.PlannedFlowCache.TryGetValue(selectedEdge, out TrafficCounters plannedFlow))
+            {
+                counters.Add(plannedFlow);
+            }
 
             TransitScopeSelectionStats stats = BuildTrafficStats(
                 titleKey: "stats.title.road",
@@ -126,33 +100,14 @@ namespace Transit_Scope.code
 
         private void AnalyzeBuildingTraffic(Entity building)
         {
-            if (!TryGetBuildingCenter(building, out float3 buildingCenter))
-            {
-                m_UISystem.ClearStats();
-                return;
-            }
-
-            float searchRadius = EstimateBuildingTrafficSearchRadius(building);
             TrafficCounters counters = default;
 
-            using NativeArray<Entity> edges = m_TrafficEdgeQuery.ToEntityArray(World.UpdateAllocator.ToAllocator);
-            for (int i = 0; i < edges.Length; i++)
+            // 原版口径：建筑流量仅统计“正在前往该建筑”的目标流入量。
+            // 抛弃了过去粗暴的“按半径扫描周围道路”的错误做法。
+            if (m_FlowSystem.PlannedFlowCache.IsCreated && 
+                m_FlowSystem.PlannedFlowCache.TryGetValue(building, out TrafficCounters inflow))
             {
-                Entity edge = edges[i];
-                if (!EntityManager.HasComponent<Curve>(edge))
-                {
-                    continue;
-                }
-
-                Curve curve = EntityManager.GetComponentData<Curve>(edge);
-                float3 midpoint = EvaluateBezier(curve.m_Bezier, 0.5f);
-
-                if (math.distance(midpoint, buildingCenter) > searchRadius)
-                {
-                    continue;
-                }
-
-                AccumulateTrafficFromEdge(edge, ref counters);
+                counters.Add(inflow);
             }
 
             TransitScopeSelectionStats stats = BuildTrafficStats(
@@ -160,7 +115,7 @@ namespace Transit_Scope.code
                 fallbackTitle: "Building Traffic",
                 subtitleKey: "stats.subtitle.nearby_building",
                 subtitleArg: building.Index.ToString(),
-                fallbackSubtitle: $"Nearby traffic around building #{building.Index}",
+                fallbackSubtitle: $"Inflow traffic for building #{building.Index}",
                 counters);
 
             m_UISystem.PresentStats(stats);
@@ -283,7 +238,6 @@ namespace Transit_Scope.code
 
         /// <summary>
         /// 把后端统计结果转换成前端饼图数据。
-        /// 没有流量时保留一个占位扇区保证图表可见，但 displayTotal 仍然显示 0。
         /// </summary>
         private static TransitScopeSelectionStats BuildTrafficStats(
             string titleKey,
@@ -325,67 +279,6 @@ namespace Transit_Scope.code
             }
 
             return stats;
-        }
-
-        private bool TryGetBuildingCenter(Entity building, out float3 center)
-        {
-            center = float3.zero;
-
-            if (EntityManager.HasComponent<Transform>(building))
-            {
-                center = EntityManager.GetComponentData<Transform>(building).m_Position;
-                return true;
-            }
-
-            return false;
-        }
-
-        private float EstimateBuildingTrafficSearchRadius(Entity building)
-        {
-            float radius = 32f;
-
-            if (EntityManager.HasComponent<PrefabRefData>(building))
-            {
-                PrefabRefData prefabRef = EntityManager.GetComponentData<PrefabRefData>(building);
-                Entity prefab = prefabRef.m_Prefab;
-
-                if (prefab != Entity.Null && EntityManager.Exists(prefab))
-                {
-                    if (EntityManager.HasComponent<BuildingExtensionData>(prefab))
-                    {
-                        BuildingExtensionData ext = EntityManager.GetComponentData<BuildingExtensionData>(prefab);
-                        radius = math.max(radius, math.max(ext.m_LotSize.x, ext.m_LotSize.y) * 10f);
-                    }
-                    else if (EntityManager.HasComponent<BuildingData>(prefab))
-                    {
-                        BuildingData data = EntityManager.GetComponentData<BuildingData>(prefab);
-                        radius = math.max(radius, math.max(data.m_LotSize.x, data.m_LotSize.y) * 10f);
-                    }
-                }
-            }
-
-            if (EntityManager.HasComponent<CullingInfo>(building))
-            {
-                CullingInfo cullingInfo = EntityManager.GetComponentData<CullingInfo>(building);
-                float3 boundsSize = cullingInfo.m_Bounds.max - cullingInfo.m_Bounds.min;
-                radius = math.max(radius, math.max(boundsSize.x, boundsSize.z) * 1.5f);
-            }
-
-            return radius;
-        }
-
-        private static float3 EvaluateBezier(Bezier4x3 bezier, float t)
-        {
-            float u = 1f - t;
-            float tt = t * t;
-            float uu = u * u;
-            float uuu = uu * u;
-            float ttt = tt * t;
-
-            return uuu * bezier.a +
-                   3f * uu * t * bezier.b +
-                   3f * u * tt * bezier.c +
-                   ttt * bezier.d;
         }
 
         private static void AddStat(TransitScopeSelectionStats stats, string labelKey, string fallbackLabel, int value, string color)

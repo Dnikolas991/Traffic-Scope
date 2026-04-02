@@ -1,5 +1,6 @@
 using Colossal.Mathematics;
 using Game;
+using Game.Common;
 using Game.Net;
 using Game.Prefabs;
 using Game.Rendering;
@@ -11,8 +12,8 @@ using UnityEngine;
 namespace Transit_Scope.code
 {
     /// <summary>
-    /// 该系统专门负责 hover 视觉。
-    /// confirm 后的原生 selected marker 仍由 ToolSystem.selected 接管。
+    /// 该系统专门负责 3D 空间中的视觉高亮 (Overlay)。
+    /// 这里的实现逻辑参考了 Move It 和原版选中效果，旨在提供高性能且美观的视觉反馈。
     /// </summary>
     public partial class TransitScopeOverlaySystem : GameSystemBase
     {
@@ -25,12 +26,13 @@ namespace Transit_Scope.code
 
             m_ToolSystem = World.GetOrCreateSystemManaged<TransitScopeToolSystem>();
             m_OverlayRenderSystem = World.GetOrCreateSystemManaged<OverlayRenderSystem>();
-            Logger.Info("TransitScopeOverlaySystem 已启动");
+            Logger.Info("TransitScopeOverlaySystem 已启动，正在监听高亮请求");
         }
 
         protected override void OnUpdate()
         {
-            // 只在工具处于激活状态且当前 hover 还没有确认锁定时绘制 overlay。
+            // 只有当工具激活、且有 Hover 对象、且尚未确认为 Selected 时，才绘制 Hover Overlay。
+            // 已确定的 Selected 对象由原版 Marker 渲染。
             if (m_ToolSystem == null || !m_ToolSystem.ShouldRenderHoverOverlay)
             {
                 return;
@@ -47,22 +49,20 @@ namespace Transit_Scope.code
                 return;
             }
 
+            // 根据选中的类型（道路或建筑）调用不同的渲染路径
             if (hoveredKind == TransitScopeToolSystem.SelectionKind.Road)
             {
                 DrawRoadHover(overlayBuffer, hoveredEntity);
-                return;
             }
-
-            if (hoveredKind == TransitScopeToolSystem.SelectionKind.Building)
+            else if (hoveredKind == TransitScopeToolSystem.SelectionKind.Building)
             {
                 DrawBuildingHover(overlayBuffer, hoveredEntity);
             }
         }
 
         /// <summary>
-        /// 道路与轨道 hover 使用双层曲线：
-        /// 1. 更宽更淡的蒙版。
-        /// 2. 更细的淡蓝描边。
+        /// 道路/轨道高亮渲染。
+        /// 采用“光晕蒙版 + 细描边”方案，较好地融入原版并突出目标。
         /// </summary>
         private void DrawRoadHover(OverlayRenderSystem.Buffer overlayBuffer, Entity edgeEntity)
         {
@@ -73,61 +73,81 @@ namespace Transit_Scope.code
 
             Curve curveData = EntityManager.GetComponentData<Curve>(edgeEntity);
             float roadWidth = GetRoadVisualWidth(edgeEntity);
+            
+            // 1. 宽幅蒙版：使用极低透明度的淡蓝色覆盖整段道路，产生选中感。
             float fillWidth = roadWidth + TransitScopeOverlayColors.RoadFillPadding;
-            float outlineCurveWidth = roadWidth + TransitScopeOverlayColors.RoadOutlinePadding;
-
             TransitScopeOverlayHelpers.DrawCurve(
                 overlayBuffer,
                 curveData.m_Bezier,
                 Color.clear,
-                TransitScopeOverlayColors.RoadFill,
+                TransitScopeOverlayColors.MainFill,
                 0.01f,
                 fillWidth);
 
+            // 2. 精细描边：沿道路边缘绘制一道亮蓝色细线，增加专业感。
+            float outlineCurveWidth = roadWidth + TransitScopeOverlayColors.RoadOutlinePadding;
             TransitScopeOverlayHelpers.DrawCurve(
                 overlayBuffer,
                 curveData.m_Bezier,
-                TransitScopeOverlayColors.RoadOutline,
+                TransitScopeOverlayColors.MainOutline,
                 Color.clear,
                 TransitScopeOverlayColors.RoadOutlineWidth,
                 outlineCurveWidth);
         }
 
         /// <summary>
-        /// 建筑当前回到较窄的地块边框方案。
+        /// 建筑 3D 轮廓渲染 (参考 Move It 设计)。
+        /// 通过从 Prefab 读取本地 Bounds 并结合实体 Transform，生成精准的 3D 有向包围盒 (OBB)。
         /// </summary>
         private void DrawBuildingHover(OverlayRenderSystem.Buffer overlayBuffer, Entity buildingEntity)
         {
-            if (!TryGetBuildingHalfSize(buildingEntity, out float3 halfSize))
+            // 基础组件检查
+            if (!EntityManager.HasComponent<Game.Objects.Transform>(buildingEntity) || 
+                !EntityManager.HasComponent<PrefabRef>(buildingEntity))
             {
                 return;
             }
 
+            // 获取实例的 Transform 和对应的 Prefab 引用
             Game.Objects.Transform transform = EntityManager.GetComponentData<Game.Objects.Transform>(buildingEntity);
-            transform.m_Position.y += TransitScopeOverlayColors.BuildingLift;
+            PrefabRef prefabRef = EntityManager.GetComponentData<PrefabRef>(buildingEntity);
+            Entity prefabEntity = prefabRef.m_Prefab;
 
-            TransitScopeOverlayHelpers.CalculateRectangleLines(
-                transform,
-                TransitScopeOverlayColors.BuildingOutlineWidth,
-                halfSize,
-                out Line3.Segment left,
-                out Line3.Segment right,
-                out Line3.Segment back,
-                out Line3.Segment front);
+            // 重要：从 Prefab 中获取原始的几何包围盒 (ObjectGeometryData)
+            // 这比 CullingInfo 更可靠，因为它代表了模型在本地空间的原始尺寸
+            if (!EntityManager.HasComponent<ObjectGeometryData>(prefabEntity))
+            {
+                return;
+            }
 
-            TransitScopeOverlayHelpers.DrawLine(overlayBuffer, left, TransitScopeOverlayColors.BuildingOutline, TransitScopeOverlayColors.BuildingOutlineWidth, projected: true);
-            TransitScopeOverlayHelpers.DrawLine(overlayBuffer, right, TransitScopeOverlayColors.BuildingOutline, TransitScopeOverlayColors.BuildingOutlineWidth, projected: true);
-            TransitScopeOverlayHelpers.DrawLine(overlayBuffer, back, TransitScopeOverlayColors.BuildingOutline, TransitScopeOverlayColors.BuildingOutlineWidth, projected: true);
-            TransitScopeOverlayHelpers.DrawLine(overlayBuffer, front, TransitScopeOverlayColors.BuildingOutline, TransitScopeOverlayColors.BuildingOutlineWidth, projected: true);
+            ObjectGeometryData geometryData = EntityManager.GetComponentData<ObjectGeometryData>(prefabEntity);
+            
+            // 使用辅助函数生成 12 条 3D 线段。
+            // 这里 geometryData.m_Bounds 是模型在本地空间的尺寸，不含旋转。
+            // GetBuilding3DOutline 会负责将其应用 transform.m_Rotation 进行旋转。
+            Line3.Segment[] edges = TransitScopeOverlayHelpers.GetBuilding3DOutline(
+                transform, 
+                geometryData.m_Bounds, 
+                TransitScopeOverlayColors.BuildingExpand);
+
+            // 批量绘制所有棱边，实现 Move It 风格的 3D 描边
+            foreach (var edge in edges)
+            {
+                TransitScopeOverlayHelpers.DrawLine(
+                    overlayBuffer, 
+                    edge, 
+                    TransitScopeOverlayColors.MainOutline, 
+                    TransitScopeOverlayColors.BuildingOutlineWidth, 
+                    projected: false); // false 表示 3D 空间绘制，不贴地，保持立体感
+            }
         }
 
         /// <summary>
-        /// 道路实际视觉宽度优先尝试从 EdgeGeometry 的左右边界估算。
-        /// 这样不同道路、轨道、地铁线的 hover 蒙版都会自动跟着变宽窄。
+        /// 自动获取道路实际宽度，确保 Overlay 宽度能自适应高速公路或羊肠小道。
         /// </summary>
         private float GetRoadVisualWidth(Entity edgeEntity)
         {
-            const float fallbackWidth = 10.5f;
+            const float fallbackWidth = 8.0f;
 
             if (!EntityManager.HasComponent<EdgeGeometry>(edgeEntity))
             {
@@ -137,54 +157,7 @@ namespace Transit_Scope.code
             EdgeGeometry edgeGeometry = EntityManager.GetComponentData<EdgeGeometry>(edgeEntity);
             float startWidth = math.distance(edgeGeometry.m_Start.m_Left.a, edgeGeometry.m_Start.m_Right.a);
             float endWidth = math.distance(edgeGeometry.m_End.m_Left.d, edgeGeometry.m_End.m_Right.d);
-            return math.max(fallbackWidth, (startWidth + endWidth) * 0.5f);
-        }
-
-        /// <summary>
-        /// 从 prefab 读取建筑地块尺寸。
-        /// 这里继续沿用 Move It 常见的 lot size * 4 的世界长度换算方式。
-        /// </summary>
-        private bool TryGetBuildingHalfSize(Entity buildingEntity, out float3 halfSize)
-        {
-            halfSize = new float3(8f, 0f, 8f);
-
-            if (!EntityManager.HasComponent<Game.Objects.Transform>(buildingEntity))
-            {
-                return false;
-            }
-
-            if (!EntityManager.HasComponent<PrefabRef>(buildingEntity))
-            {
-                return true;
-            }
-
-            PrefabRef prefabRef = EntityManager.GetComponentData<PrefabRef>(buildingEntity);
-            Entity prefabEntity = prefabRef.m_Prefab;
-            if (prefabEntity == Entity.Null || !EntityManager.Exists(prefabEntity))
-            {
-                return true;
-            }
-
-            if (EntityManager.HasComponent<BuildingExtensionData>(prefabEntity))
-            {
-                BuildingExtensionData extensionData = EntityManager.GetComponentData<BuildingExtensionData>(prefabEntity);
-                halfSize = new float3(
-                    math.max(1f, extensionData.m_LotSize.x * 4f),
-                    0f,
-                    math.max(1f, extensionData.m_LotSize.y * 4f));
-                return true;
-            }
-
-            if (EntityManager.HasComponent<BuildingData>(prefabEntity))
-            {
-                BuildingData buildingData = EntityManager.GetComponentData<BuildingData>(prefabEntity);
-                halfSize = new float3(
-                    math.max(1f, buildingData.m_LotSize.x * 4f),
-                    0f,
-                    math.max(1f, buildingData.m_LotSize.y * 4f));
-            }
-
-            return true;
+            return math.max(2f, (startWidth + endWidth) * 0.5f);
         }
     }
 }

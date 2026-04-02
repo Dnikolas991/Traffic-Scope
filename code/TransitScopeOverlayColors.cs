@@ -3,54 +3,53 @@ using UnityEngine;
 namespace Transit_Scope.code
 {
     /// <summary>
-    /// 统一管理 Transit Scope 的 overlay 颜色与线宽。
+    /// 统一管理 Transit Scope 的 Overlay 视觉参数。
+    /// 这里的配色和线宽参考了原版选中效果、Traffic 和 Move It，旨在提供更现代、专业的视觉反馈。
     /// </summary>
     internal static class TransitScopeOverlayColors
     {
+        // --- 核心配色 (淡蓝色系) ---
+        
         /// <summary>
-        /// 道路与轨道 hover 的外层描边颜色。
+        /// 悬停/选中时的主要描边颜色 (淡蓝色)。
+        /// 具有高不透明度，确保边缘清晰可见。
         /// </summary>
-        public static readonly Color RoadOutline = new Color(0.60f, 0.86f, 1.00f, 0.98f);
+        public static readonly Color MainOutline = new Color(0.0f, 0.75f, 1.0f, 0.95f);
 
         /// <summary>
-        /// 道路与轨道 hover 的填充蒙版颜色。
-        /// 透明度较低，保证下面的道路纹理仍然清晰可见。
+        /// 悬停/选中时的填充蒙版颜色 (极淡蓝色)。
+        /// 低不透明度 (0.12) 可以在高亮目标的同时不遮挡地图细节。
         /// </summary>
-        public static readonly Color RoadFill = new Color(0.42f, 0.74f, 1.00f, 0.11f);
+        public static readonly Color MainFill = new Color(0.0f, 0.65f, 1.0f, 0.12f);
+
+        // --- 道路与轨道参数 ---
 
         /// <summary>
-        /// 建筑 hover 的边框颜色。
+        /// 道路描边的线宽。
         /// </summary>
-        public static readonly Color BuildingOutline = new Color(0.58f, 0.84f, 1.00f, 0.98f);
-
-        /// <summary>
-        /// 预留给建筑 hover 填充色，当前未启用。
-        /// </summary>
-        public static readonly Color BuildingFill = new Color(0.40f, 0.70f, 1.00f, 0.08f);
-
-        /// <summary>
-        /// 道路描边线宽，保持比建筑边框更细。
-        /// </summary>
-        public const float RoadOutlineWidth = 1.85f;
+        public const float RoadOutlineWidth = 1.2f;
 
         /// <summary>
         /// 道路填充蒙版向外扩张的距离。
+        /// 较大的 Padding (4.5f) 可以营造出类似“发光”的蒙版效果。
         /// </summary>
-        public const float RoadFillPadding = 3.20f;
+        public const float RoadFillPadding = 4.5f;
 
         /// <summary>
         /// 道路描边相对道路本体向外扩张的距离。
         /// </summary>
-        public const float RoadOutlinePadding = 1.10f;
+        public const float RoadOutlinePadding = 0.8f;
+
+        // --- 建筑 3D 参数 ---
 
         /// <summary>
-        /// 建筑边框线宽，当前按用户要求收窄一些。
+        /// 建筑 3D 轮廓线的宽度。
         /// </summary>
-        public const float BuildingOutlineWidth = 1.85f;
+        public const float BuildingOutlineWidth = 1.5f;
 
         /// <summary>
-        /// 建筑矩形方案整体向上抬一点，避免与地面重合闪烁。
+        /// 建筑 3D 线框微量外扩量，防止线条和模型面重叠产生 Z-fighting 闪烁。
         /// </summary>
-        public const float BuildingLift = 0.12f;
+        public const float BuildingExpand = 0.15f;
     }
 }
