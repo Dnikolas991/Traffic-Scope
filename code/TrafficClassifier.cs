@@ -6,7 +6,7 @@ namespace Transit_Scope.code
     /// <summary>
     /// 统一交通分类口径。
     /// </summary>
-    internal static class ScopeTrafficClassifier
+    internal static class TrafficClassifier
     {
         public static TrafficCounters ClassifySingle(EntityManager entityManager, Entity entity)
         {

@@ -8,7 +8,7 @@ namespace Transit_Scope.code
     /// 选择工具、路径分析和 Overlay 都会碰到子实体、Temp 实体和 Owner 链，
     /// 这里负责把它们还原成真正的道路边或建筑实体。
     /// </summary>
-    internal static class ScopeEntityResolver
+    internal static class EntityResolver
     {
         private const int MaxOwnerTraversalDepth = 8;
 

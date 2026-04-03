@@ -8,7 +8,7 @@ namespace Transit_Scope.code
     /// <summary>
     /// Overlay 绘制辅助函数。
     /// </summary>
-    internal static class ScopeOverlayHelpers
+    internal static class OverlayHelpers
     {
         public static readonly OverlayRenderSystem.StyleFlags Projected = OverlayRenderSystem.StyleFlags.Projected;
         public static readonly OverlayRenderSystem.StyleFlags Fixed = 0;

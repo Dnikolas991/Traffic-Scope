@@ -12,13 +12,13 @@ namespace Transit_Scope.code
     /// 2. 将最新统计面板数据推送给前端。
     /// 3. 在选择取消时及时清空前端显示状态。
     /// </summary>
-    public partial class ScopeUISystem : UISystemBase
+    public partial class UIBridgeSystem : UISystemBase
     {
         private ValueBinding<bool> m_ActiveBinding;
         private ValueBinding<bool> m_HasStatsBinding;
         private ValueBinding<string> m_StatsJsonBinding;
 
-        private ScopeToolSystem m_ScopeToolSystem;
+        private SelectionToolSystem m_SelectionToolSystem;
 
         public bool IsActive => m_ActiveBinding.value;
 
@@ -26,7 +26,7 @@ namespace Transit_Scope.code
         {
             base.OnCreate();
 
-            m_ScopeToolSystem = World.GetOrCreateSystemManaged<ScopeToolSystem>();
+            m_SelectionToolSystem = World.GetOrCreateSystemManaged<SelectionToolSystem>();
 
             AddBinding(m_ActiveBinding = new ValueBinding<bool>("transitScope", "isActive", false));
             AddBinding(m_HasStatsBinding = new ValueBinding<bool>("transitScope", "hasStats", false));
@@ -36,7 +36,7 @@ namespace Transit_Scope.code
             AddBinding(new TriggerBinding("transitScope", "confirm", OnConfirmSelection));
 
             SyncBindings();
-            Logger.Info("ScopeUISystem 已启动，前后端绑定已建立。");
+            Logger.Info("UIBridgeSystem 已启动，前后端绑定已建立。");
         }
 
         protected override void OnUpdate()
@@ -56,11 +56,11 @@ namespace Transit_Scope.code
 
             if (active)
             {
-                m_ScopeToolSystem.EnableSelectionMode();
+                m_SelectionToolSystem.EnableSelectionMode();
             }
             else
             {
-                m_ScopeToolSystem.DisableSelectionMode();
+                m_SelectionToolSystem.DisableSelectionMode();
                 ClearStats();
             }
 
@@ -74,7 +74,7 @@ namespace Transit_Scope.code
                 return;
             }
 
-            m_ScopeToolSystem.ConfirmHoveredTarget();
+            m_SelectionToolSystem.ConfirmHoveredTarget();
             SyncBindings();
         }
 
@@ -83,14 +83,14 @@ namespace Transit_Scope.code
         /// </summary>
         private void SyncBindings()
         {
-            if (m_ScopeToolSystem == null)
+            if (m_SelectionToolSystem == null)
             {
                 return;
             }
 
-            m_ActiveBinding.Update(m_ScopeToolSystem.IsSelecting);
+            m_ActiveBinding.Update(m_SelectionToolSystem.IsSelecting);
 
-            if (m_ScopeToolSystem.SelectedEntity == Entity.Null && m_HasStatsBinding.value)
+            if (m_SelectionToolSystem.SelectedEntity == Entity.Null && m_HasStatsBinding.value)
             {
                 ClearStats();
             }
@@ -99,7 +99,7 @@ namespace Transit_Scope.code
         /// <summary>
         /// 向前端推送新的统计卡片数据。
         /// </summary>
-        internal void PresentStats(ScopeSelectionStats stats)
+        internal void PresentStats(SelectionStats stats)
         {
             if (stats == null)
             {

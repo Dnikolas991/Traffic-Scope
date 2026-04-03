@@ -2,15 +2,15 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import { useValue } from "cs2/api";
 import { Button } from "cs2/ui";
 import { hasStatsBinding, isActiveBinding, toggleTransitScope } from "./bindings";
-import { ScopeIcon } from "./ScopeIcon";
-import { ScopeStatsPanel } from "./ScopeStatsPanel";
+import { SelectionIcon } from "./SelectionIcon";
+import { StatsPanel } from "./StatsPanel";
 
 interface AnchorPosition {
     x: number;
     y: number;
 }
 
-export const ScopeButton = () => {
+export const SelectionButton = () => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
 
@@ -60,11 +60,11 @@ export const ScopeButton = () => {
                         height: "56px"
                     }}
                 >
-                    <ScopeIcon active={isActive} />
+                    <SelectionIcon active={isActive} />
                 </Button>
             </div>
 
-            <ScopeStatsPanel anchor={anchor} />
+            <StatsPanel anchor={anchor} />
         </>
     );
 };

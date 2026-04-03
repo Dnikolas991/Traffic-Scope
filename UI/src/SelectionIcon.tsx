@@ -4,7 +4,7 @@ interface Props {
     active: boolean;
 }
 
-export const ScopeIcon = ({ active }: Props) => {
+export const SelectionIcon = ({ active }: Props) => {
     const color = active ? "#F3FBFF" : "#D9EEF8";
 
     return (

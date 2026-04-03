@@ -19,21 +19,21 @@ namespace Transit_Scope.code
     /// 1. Hover 高亮：鼠标悬停目标的即时描边。
     /// 2. Route 高亮：当前选中对象对应的未来导航路径。
     /// </summary>
-    public partial class ScopeOverlaySystem : GameSystemBase
+    public partial class OverlaySystem : GameSystemBase
     {
-        private ScopeToolSystem m_ToolSystem;
-        private ScopeTrafficFlowSystem m_FlowSystem;
+        private SelectionToolSystem m_ToolSystem;
+        private TrafficFlowSystem m_FlowSystem;
         private OverlayRenderSystem m_OverlayRenderSystem;
 
         protected override void OnCreate()
         {
             base.OnCreate();
 
-            m_ToolSystem = World.GetOrCreateSystemManaged<ScopeToolSystem>();
-            m_FlowSystem = World.GetOrCreateSystemManaged<ScopeTrafficFlowSystem>();
+            m_ToolSystem = World.GetOrCreateSystemManaged<SelectionToolSystem>();
+            m_FlowSystem = World.GetOrCreateSystemManaged<TrafficFlowSystem>();
             m_OverlayRenderSystem = World.GetOrCreateSystemManaged<OverlayRenderSystem>();
 
-            Logger.Info("ScopeOverlaySystem 已启动，开始绘制悬停高亮和导航路径。");
+            Logger.Info("OverlaySystem 已启动，开始绘制悬停高亮和导航路径。");
         }
 
         protected override void OnUpdate()
@@ -51,7 +51,7 @@ namespace Transit_Scope.code
         /// </summary>
         private void DrawSelectedRouteOverlay(OverlayRenderSystem.Buffer overlayBuffer)
         {
-            ScopeSelectionAnalysis analysis = m_FlowSystem.CurrentSelectionAnalysis;
+            SelectionAnalysis analysis = m_FlowSystem.CurrentSelectionAnalysis;
             if (analysis == null || analysis.RouteEdgeWeights.Count == 0)
             {
                 return;
@@ -78,16 +78,16 @@ namespace Transit_Scope.code
                 float roadWidth = GetRoadVisualWidth(edgeEntity);
 
                 float intensity = math.saturate(routeEntry.Value / (float)maxWeight);
-                float routeWidth = roadWidth + ScopeOverlayColors.RoutePadding + intensity * 2.0f;
-                float outlineWidth = ScopeOverlayColors.RouteOutlineWidth + intensity * 0.6f;
+                float routeWidth = roadWidth + OverlayColors.RoutePadding + intensity * 2.0f;
+                float outlineWidth = OverlayColors.RouteOutlineWidth + intensity * 0.6f;
 
-                Color fillColor = ScopeOverlayColors.RouteFill;
+                Color fillColor = OverlayColors.RouteFill;
                 fillColor.a += intensity * 0.12f;
 
-                Color outlineColor = ScopeOverlayColors.RouteOutline;
+                Color outlineColor = OverlayColors.RouteOutline;
                 outlineColor.a += intensity * 0.18f;
 
-                ScopeOverlayHelpers.DrawCurve(
+                OverlayHelpers.DrawCurve(
                     overlayBuffer,
                     curveData.m_Bezier,
                     outlineColor,
@@ -109,18 +109,18 @@ namespace Transit_Scope.code
             }
 
             Entity hoveredEntity = m_ToolSystem.HoveredEntity;
-            ScopeToolSystem.SelectionKind hoveredKind = m_ToolSystem.HoveredKind;
+            SelectionToolSystem.SelectionKind hoveredKind = m_ToolSystem.HoveredKind;
 
             if (hoveredEntity == Entity.Null || !EntityManager.Exists(hoveredEntity))
             {
                 return;
             }
 
-            if (hoveredKind == ScopeToolSystem.SelectionKind.Road)
+            if (hoveredKind == SelectionToolSystem.SelectionKind.Road)
             {
                 DrawRoadHover(overlayBuffer, hoveredEntity);
             }
-            else if (hoveredKind == ScopeToolSystem.SelectionKind.Building)
+            else if (hoveredKind == SelectionToolSystem.SelectionKind.Building)
             {
                 DrawBuildingHover(overlayBuffer, hoveredEntity);
             }
@@ -139,21 +139,21 @@ namespace Transit_Scope.code
             Curve curveData = EntityManager.GetComponentData<Curve>(edgeEntity);
             float roadWidth = GetRoadVisualWidth(edgeEntity);
 
-            ScopeOverlayHelpers.DrawCurve(
+            OverlayHelpers.DrawCurve(
                 overlayBuffer,
                 curveData.m_Bezier,
                 Color.clear,
-                ScopeOverlayColors.MainFill,
+                OverlayColors.MainFill,
                 0.01f,
-                roadWidth + ScopeOverlayColors.RoadFillPadding);
+                roadWidth + OverlayColors.RoadFillPadding);
 
-            ScopeOverlayHelpers.DrawCurve(
+            OverlayHelpers.DrawCurve(
                 overlayBuffer,
                 curveData.m_Bezier,
-                ScopeOverlayColors.MainOutline,
+                OverlayColors.MainOutline,
                 Color.clear,
-                ScopeOverlayColors.RoadOutlineWidth,
-                roadWidth + ScopeOverlayColors.RoadOutlinePadding);
+                OverlayColors.RoadOutlineWidth,
+                roadWidth + OverlayColors.RoadOutlinePadding);
         }
 
         /// <summary>
@@ -178,18 +178,18 @@ namespace Transit_Scope.code
             }
 
             ObjectGeometryData geometryData = EntityManager.GetComponentData<ObjectGeometryData>(prefabEntity);
-            Line3.Segment[] outlineEdges = ScopeOverlayHelpers.GetBuilding3DOutline(
+            Line3.Segment[] outlineEdges = OverlayHelpers.GetBuilding3DOutline(
                 transform,
                 geometryData.m_Bounds,
-                ScopeOverlayColors.BuildingExpand);
+                OverlayColors.BuildingExpand);
 
             foreach (Line3.Segment edge in outlineEdges)
             {
-                ScopeOverlayHelpers.DrawLine(
+                OverlayHelpers.DrawLine(
                     overlayBuffer,
                     edge,
-                    ScopeOverlayColors.MainOutline,
-                    ScopeOverlayColors.BuildingOutlineWidth,
+                    OverlayColors.MainOutline,
+                    OverlayColors.BuildingOutlineWidth,
                     projected: false);
             }
         }

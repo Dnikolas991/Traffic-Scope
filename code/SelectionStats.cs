@@ -7,7 +7,8 @@ using System.Text;
 namespace Transit_Scope.code
 {
     [DataContract]
-    internal sealed class ScopeStatItem
+    //不准继承，只在当前程序集使用
+    internal sealed class StatItem
     {
         [DataMember(Name = "labelKey")]
         public string LabelKey { get; set; }
@@ -23,7 +24,7 @@ namespace Transit_Scope.code
     }
 
     [DataContract]
-    internal sealed class ScopeSelectionStats
+    internal sealed class SelectionStats
     {
         [DataMember(Name = "titleKey")]
         public string TitleKey { get; set; }
@@ -47,11 +48,11 @@ namespace Transit_Scope.code
         public int DisplayTotal { get; set; }
 
         [DataMember(Name = "items")]
-        public List<ScopeStatItem> Items { get; set; } = new();
+        public List<StatItem> Items { get; set; } = new();
 
         public string ToJson()
         {
-            DataContractJsonSerializer serializer = new(typeof(ScopeSelectionStats));
+            DataContractJsonSerializer serializer = new(typeof(SelectionStats));
 
             using MemoryStream stream = new();
             serializer.WriteObject(stream, this);

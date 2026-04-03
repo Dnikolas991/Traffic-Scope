@@ -5,7 +5,7 @@ namespace Transit_Scope.code
     /// <summary>
     /// Overlay 颜色和尺寸参数。
     /// </summary>
-    internal static class ScopeOverlayColors
+    internal static class OverlayColors
     {
         public static readonly Color MainOutline = new(0.00f, 0.75f, 1.00f, 0.95f);
         public static readonly Color MainFill = new(0.00f, 0.65f, 1.00f, 0.12f);

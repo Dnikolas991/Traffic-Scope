@@ -31,7 +31,7 @@ interface Props {
     anchor: AnchorPosition | null;
 }
 
-export const ScopeStatsPanel = ({ anchor }: Props) => {
+export const StatsPanel = ({ anchor }: Props) => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
