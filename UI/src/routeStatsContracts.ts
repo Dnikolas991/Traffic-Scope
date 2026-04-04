@@ -1,5 +1,8 @@
 export type RouteVisualizationKind =
-    | "Car"
+    | "CargoFreight"
+    | "PrivateCar"
+    | "PublicTransport"
+    | "PublicService"
     | "Watercraft"
     | "Aircraft"
     | "Train"

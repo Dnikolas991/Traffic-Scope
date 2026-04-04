@@ -335,6 +335,15 @@ namespace Transit_Scope.code
             Dictionary<RouteVisualizationKind, RouteStatisticsBucket> bucketMap = new();
             Dictionary<(RouteVisualizationKind Kind, ulong RouteKey), RouteStatisticsLineItem> lineMap = new();
 
+            for (int i = 0; i < RouteVisualizationKinds.Ordered.Length; i++)
+            {
+                RouteVisualizationKind kind = RouteVisualizationKinds.Ordered[i];
+                bucketMap[kind] = new RouteStatisticsBucket
+                {
+                    Kind = kind
+                };
+            }
+
             for (int i = 0; i < matchedSources.Count; i++)
             {
                 MatchedPathSourceRecord source = matchedSources[i];
@@ -373,12 +382,13 @@ namespace Transit_Scope.code
                 line.SourceCount++;
             }
 
-            List<RouteStatisticsBucket> result = new(bucketMap.Values);
-            result.Sort((left, right) => right.SourceCount.CompareTo(left.SourceCount));
-
-            for (int i = 0; i < result.Count; i++)
+            List<RouteStatisticsBucket> result = new(RouteVisualizationKinds.Ordered.Length);
+            for (int i = 0; i < RouteVisualizationKinds.Ordered.Length; i++)
             {
-                result[i].Lines.Sort((left, right) => right.SourceCount.CompareTo(left.SourceCount));
+                RouteVisualizationKind kind = RouteVisualizationKinds.Ordered[i];
+                RouteStatisticsBucket bucket = bucketMap[kind];
+                bucket.Lines.Sort((left, right) => right.SourceCount.CompareTo(left.SourceCount));
+                result.Add(bucket);
             }
 
             return result;
@@ -678,32 +688,172 @@ namespace Transit_Scope.code
 
         private RouteVisualizationKind ClassifyVisualizationKind(Entity sourceEntity)
         {
-            if (m_EntityManager.HasComponent<Human>(sourceEntity))
+            if (HasAnyClassificationComponent<Human>(sourceEntity))
             {
                 return RouteVisualizationKind.Human;
             }
 
-            if (m_EntityManager.HasComponent<Watercraft>(sourceEntity))
+            if (HasAnyClassificationComponent<Watercraft>(sourceEntity))
             {
                 return RouteVisualizationKind.Watercraft;
             }
 
-            if (m_EntityManager.HasComponent<Aircraft>(sourceEntity))
+            if (HasAnyClassificationComponent<Aircraft>(sourceEntity))
             {
                 return RouteVisualizationKind.Aircraft;
             }
 
-            if (m_EntityManager.HasComponent<Train>(sourceEntity))
+            if (HasAnyClassificationComponent<Train>(sourceEntity))
             {
                 return RouteVisualizationKind.Train;
             }
 
-            if (m_EntityManager.HasComponent<Bicycle>(sourceEntity))
+            if (HasAnyClassificationComponent<Bicycle>(sourceEntity))
             {
                 return RouteVisualizationKind.Bicycle;
             }
 
-            return RouteVisualizationKind.Car;
+            return ClassifyCarLikeEntity(sourceEntity);
+        }
+
+        /// <summary>
+        /// 车类先判断具体功能组件，最后才回退到普通 Car => PrivateCar。
+        /// 这样后续继续细分 Taxi / Emergency 等层级时只需扩展这里。
+        /// </summary>
+        private RouteVisualizationKind ClassifyCarLikeEntity(Entity sourceEntity)
+        {
+            if (HasAnyComponentOnClassificationEntities<Game.Vehicles.Ambulance, Game.Vehicles.FireEngine, Game.Vehicles.GarbageTruck, Game.Vehicles.Hearse, Game.Vehicles.MaintenanceVehicle, Game.Vehicles.ParkMaintenanceVehicle, Game.Vehicles.PoliceCar, Game.Vehicles.PostVan, Game.Vehicles.PrisonerTransport, Game.Vehicles.RoadMaintenanceVehicle, Game.Vehicles.WorkVehicle>(sourceEntity))
+            {
+                return RouteVisualizationKind.PublicService;
+            }
+
+            if (HasAnyComponentOnClassificationEntities<Game.Vehicles.PublicTransport, PassengerTransport, Game.Vehicles.Taxi>(sourceEntity))
+            {
+                return RouteVisualizationKind.PublicTransport;
+            }
+
+            if (HasAnyComponentOnClassificationEntities<Game.Vehicles.CargoTransport, Game.Vehicles.DeliveryTruck, GoodsDeliveryVehicle>(sourceEntity))
+            {
+                return RouteVisualizationKind.CargoFreight;
+            }
+
+            if (HasAnyClassificationComponent<Game.Vehicles.PersonalCar>(sourceEntity) ||
+                HasAnyClassificationComponent<Car>(sourceEntity))
+            {
+                return RouteVisualizationKind.PrivateCar;
+            }
+
+            // 对没有明确车辆标签但最终落入车类路径的实体，仍然安全回退到私家车。
+            return RouteVisualizationKind.PrivateCar;
+        }
+
+        private bool HasAnyClassificationComponent<T>(Entity sourceEntity)
+            where T : unmanaged, IComponentData
+        {
+            List<Entity> candidates = GetClassificationCandidates(sourceEntity);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (m_EntityManager.HasComponent<T>(candidates[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasAnyComponentOnClassificationEntities<T1, T2, T3>(Entity sourceEntity)
+            where T1 : unmanaged, IComponentData
+            where T2 : unmanaged, IComponentData
+            where T3 : unmanaged, IComponentData
+        {
+            List<Entity> candidates = GetClassificationCandidates(sourceEntity);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                Entity candidate = candidates[i];
+                if (m_EntityManager.HasComponent<T1>(candidate) ||
+                    m_EntityManager.HasComponent<T2>(candidate) ||
+                    m_EntityManager.HasComponent<T3>(candidate))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasAnyComponentOnClassificationEntities<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Entity sourceEntity)
+            where T1 : unmanaged, IComponentData
+            where T2 : unmanaged, IComponentData
+            where T3 : unmanaged, IComponentData
+            where T4 : unmanaged, IComponentData
+            where T5 : unmanaged, IComponentData
+            where T6 : unmanaged, IComponentData
+            where T7 : unmanaged, IComponentData
+            where T8 : unmanaged, IComponentData
+            where T9 : unmanaged, IComponentData
+            where T10 : unmanaged, IComponentData
+            where T11 : unmanaged, IComponentData
+        {
+            List<Entity> candidates = GetClassificationCandidates(sourceEntity);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                Entity candidate = candidates[i];
+                if (m_EntityManager.HasComponent<T1>(candidate) ||
+                    m_EntityManager.HasComponent<T2>(candidate) ||
+                    m_EntityManager.HasComponent<T3>(candidate) ||
+                    m_EntityManager.HasComponent<T4>(candidate) ||
+                    m_EntityManager.HasComponent<T5>(candidate) ||
+                    m_EntityManager.HasComponent<T6>(candidate) ||
+                    m_EntityManager.HasComponent<T7>(candidate) ||
+                    m_EntityManager.HasComponent<T8>(candidate) ||
+                    m_EntityManager.HasComponent<T9>(candidate) ||
+                    m_EntityManager.HasComponent<T10>(candidate) ||
+                    m_EntityManager.HasComponent<T11>(candidate))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private List<Entity> GetClassificationCandidates(Entity sourceEntity)
+        {
+            List<Entity> candidates = new(3);
+            AddClassificationCandidate(sourceEntity, candidates);
+
+            Entity controller = ResolveController(sourceEntity);
+            AddClassificationCandidate(controller, candidates);
+
+            if (sourceEntity != Entity.Null &&
+                m_EntityManager.Exists(sourceEntity) &&
+                m_EntityManager.HasComponent<CurrentVehicle>(sourceEntity))
+            {
+                Entity currentVehicle = m_EntityManager.GetComponentData<CurrentVehicle>(sourceEntity).m_Vehicle;
+                AddClassificationCandidate(currentVehicle, candidates);
+                AddClassificationCandidate(ResolveController(currentVehicle), candidates);
+            }
+
+            return candidates;
+        }
+
+        private void AddClassificationCandidate(Entity candidate, List<Entity> candidates)
+        {
+            if (candidate == Entity.Null || !m_EntityManager.Exists(candidate))
+            {
+                return;
+            }
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i] == candidate)
+                {
+                    return;
+                }
+            }
+
+            candidates.Add(candidate);
         }
 
     }

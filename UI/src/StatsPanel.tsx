@@ -2,8 +2,10 @@ import React from "react";
 import { Portal } from "cs2/ui";
 import { useValue } from "cs2/api";
 import { hasStatsBinding, isActiveBinding, statsJsonBinding } from "./bindings";
-import type { RouteStatisticsBucket, RouteStatisticsLineItem, RouteStatisticsPanelPayload, RouteVisualizationKind } from "./routeStatsContracts";
+import { translate } from "./localization";
+import type { RouteStatisticsBucket, RouteStatisticsPanelPayload, RouteVisualizationKind } from "./routeStatsContracts";
 
+/** 锚点位置接口 */
 interface AnchorPosition {
     x: number;
     y: number;
@@ -13,32 +15,57 @@ interface Props {
     anchor: AnchorPosition | null;
 }
 
+/** 归一化后的数据桶接口 */
 interface NormalizedRouteStatisticsBucket extends Omit<RouteStatisticsBucket, "kind"> {
     kind: RouteVisualizationKind;
 }
 
+/** 归一化后的面板数据接口 */
 interface NormalizedRouteStatisticsPanelPayload extends Omit<RouteStatisticsPanelPayload, "buckets"> {
     buckets: NormalizedRouteStatisticsBucket[];
 }
 
-const orderedKinds: RouteVisualizationKind[] = ["Car", "Watercraft", "Aircraft", "Train", "Human", "Bicycle"];
+/** 定义统计类别的固定顺序 */
+const orderedKinds: RouteVisualizationKind[] = [
+    "CargoFreight",
+    "PrivateCar",
+    "PublicTransport",
+    "PublicService",
+    "Watercraft",
+    "Aircraft",
+    "Train",
+    "Human",
+    "Bicycle"
+];
 
-const kindLabelMap: Record<RouteVisualizationKind, string> = {
-    Car: "Car",
-    Watercraft: "Watercraft",
-    Aircraft: "Aircraft",
-    Train: "Train",
-    Human: "Human",
-    Bicycle: "Bicycle"
+/** 类别与本地化 Key 的映射 */
+const kindLabelKeyMap: Record<RouteVisualizationKind, string> = {
+    CargoFreight: "stats.item.cargo",
+    PrivateCar: "stats.item.private_cars",
+    PublicTransport: "stats.item.public_transit",
+    PublicService: "stats.item.city_service",
+    Watercraft: "stats.item.water",
+    Aircraft: "stats.item.air",
+    Train: "stats.item.rail",
+    Human: "stats.item.pedestrians",
+    Bicycle: "stats.item.bicycles"
 };
 
+/** 
+ * 活泼的颜色方案 
+ * 行人：绿色 (#4CAF50)
+ * 自行车：淡黄色 (#FFF176)
+ */
 const kindColorMap: Record<RouteVisualizationKind, string> = {
-    Car: "#5DB7FF",
-    Watercraft: "#4FC6F0",
-    Aircraft: "#F28DDA",
-    Train: "#C38BFF",
-    Human: "#D6E2F0",
-    Bicycle: "#60D5C0"
+    CargoFreight: "#FF9800",    // 橙色
+    PrivateCar: "#2196F3",     // 蓝色
+    PublicTransport: "#00BCD4", // 青色
+    PublicService: "#F44336",   // 红色
+    Watercraft: "#3F51B5",     // 靛蓝色
+    Aircraft: "#E91E63",       // 玫红色
+    Train: "#9C27B0",          // 紫色
+    Human: "#4CAF50",          // 绿色
+    Bicycle: "#FFF176"         // 淡黄色
 };
 
 export const StatsPanel = ({ anchor }: Props) => {
@@ -46,15 +73,17 @@ export const StatsPanel = ({ anchor }: Props) => {
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
 
+    // 如果面板未激活或没有数据，则不渲染
     if (!isActive || !hasStats || !statsJson || !anchor) {
         return null;
     }
 
     let payload: NormalizedRouteStatisticsPanelPayload | null = null;
     try {
+        // 解析后端传来的 JSON 数据并进行归一化处理
         payload = normalizePayload(JSON.parse(statsJson) as RouteStatisticsPanelPayload);
     } catch (error) {
-        console.error("Transit Scope route stats parse failed:", error);
+        console.error("Transit Scope 统计解析失败:", error);
         return null;
     }
 
@@ -62,9 +91,13 @@ export const StatsPanel = ({ anchor }: Props) => {
         return null;
     }
 
-    const topBuckets = payload.buckets.slice(0, 6);
-    const totalSources = Math.max(1, payload.matchedSourceCount || 0);
-    const pieBackground = buildPieGradient(topBuckets, totalSources);
+    // 筛选出有数据的类别
+    const topBuckets = payload.buckets.filter(b => b.sourceCount > 0);
+    const hasTraffic = payload.matchedSourceCount > 0;
+    const totalSources = payload.matchedSourceCount;
+    
+    // 构建环形图的 CSS 渐变背景
+    const pieBackground = buildPieGradient(payload.buckets, totalSources);
 
     return (
         <Portal>
@@ -74,363 +107,194 @@ export const StatsPanel = ({ anchor }: Props) => {
                     top: `${anchor.y}px`,
                     left: `${anchor.x}px`,
                     pointerEvents: "auto",
-                    width: "720px",
-                    borderRadius: "12px",
+                    width: "560px",             // 略微增加宽度
+                    borderRadius: "28px",        
                     overflow: "hidden",
-                    background: "linear-gradient(145deg, rgba(32, 38, 45, 0.98) 0%, rgba(20, 24, 28, 0.98) 100%)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)"
+                    background: "rgba(10, 12, 16, 0.98)", // 极深色背景，提升对比度
+                    backdropFilter: "blur(30px)", 
+                    border: "1px solid rgba(255, 255, 255, 0.18)",
+                    boxShadow: "0 35px 70px rgba(0, 0, 0, 0.9)",
+                    fontFamily: "Inter, system-ui, sans-serif"
                 }}
             >
+                {/* 顶部标题栏 */}
                 <div
                     style={{
-                        padding: "14px 20px",
-                        background: "rgba(0, 0, 0, 0.25)",
-                        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "baseline",
-                        gap: "16px"
+                        padding: "24px 32px",
+                        background: "rgba(255, 255, 255, 0.04)",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
                     }}
                 >
-                    <div>
-                        <div
-                            style={{
-                                fontSize: "16px",
-                                fontWeight: 800,
-                                color: "var(--accentColorNormal, #8fd5ff)",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.8px"
-                            }}
-                        >
-                            Route Statistics
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "12px",
-                                color: "rgba(255,255,255,0.55)"
-                            }}
-                        >
-                            Selected {payload.selectedKind} #{payload.selectedEntity}
-                        </div>
-                    </div>
-
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, auto)",
-                            gap: "4px 16px",
-                            fontSize: "12px",
-                            color: "rgba(255,255,255,0.72)"
-                        }}
-                    >
-                        <div>Targets: {payload.targetCount}</div>
-                        <div>Matched Sources: {payload.matchedSourceCount}</div>
-                        <div>Buckets: {payload.buckets.length}</div>
+                    <div style={{
+                        fontSize: "22px",        
+                        fontWeight: 900,
+                        color: "#FFFFFF",
+                        letterSpacing: "1.5px",
+                        textTransform: "uppercase"
+                    }}>
+                        Transit Statistics
                     </div>
                 </div>
 
-                <div
-                    style={{
-                        padding: "18px 20px 20px",
-                        display: "grid",
-                        gap: "16px"
-                    }}
-                >
-                    {topBuckets.length > 0 ? (
-                        <>
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "220px 1fr",
-                                    gap: "18px",
-                                    alignItems: "center",
-                                    padding: "14px",
-                                    borderRadius: "10px",
-                                    background: "rgba(255,255,255,0.04)",
-                                    border: "1px solid rgba(255,255,255,0.06)"
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        justifyItems: "center",
-                                        gap: "10px"
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            width: "164px",
-                                            height: "164px",
-                                            borderRadius: "50%",
-                                            background: pieBackground,
-                                            position: "relative",
-                                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.07)"
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                inset: "26px",
-                                                borderRadius: "50%",
-                                                background: "rgba(20, 24, 28, 0.96)",
-                                                display: "grid",
-                                                placeItems: "center",
-                                                textAlign: "center",
-                                                boxShadow: "0 0 0 1px rgba(255,255,255,0.05)"
-                                            }}
-                                        >
-                                            <div>
-                                                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.7px" }}>
-                                                    Total
-                                                </div>
-                                                <div style={{ fontSize: "28px", fontWeight: 800, color: "#FFFFFF", lineHeight: 1.1 }}>
-                                                    {payload.matchedSourceCount}
-                                                </div>
-                                            </div>
+                {/* 内容区域 */}
+                <div style={{ padding: "44px 32px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "48px" }}>
+                        
+                        {/* 环形图区域 */}
+                        <div style={{ position: "relative", width: "180px", height: "180px", flexShrink: 0 }}>
+                            {/* 外部色彩圆环层 */}
+                            <div style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "50%",
+                                background: pieBackground,
+                                boxShadow: "0 0 45px rgba(0,0,0,0.6)",
+                                zIndex: 1
+                            }} />
+                            
+                            {/* 内部空心层 */}
+                            <div style={{
+                                position: "absolute",
+                                inset: "32px",
+                                borderRadius: "50%",
+                                background: "#121519", 
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                boxShadow: "inset 0 0 25px rgba(0,0,0,0.8)",
+                                zIndex: 10               // 确保在最上层
+                            }}>
+                                {hasTraffic ? (
+                                    <>
+                                        {/* 有交通流量时显示总数 */}
+                                        <div style={{ fontSize: "52px", fontWeight: 950, color: "#FFFFFF", lineHeight: 1 }}>
+                                            {totalSources}
                                         </div>
+                                        {/* Total 标签 - 改为纯白色不透明文字 */}
+                                        <div style={{ 
+                                            fontSize: "14px",      
+                                            fontWeight: 700,
+                                            color: "#FFFFFF",    // 纯白色
+                                            textTransform: "uppercase", 
+                                            marginTop: "10px",
+                                            letterSpacing: "2px"
+                                        }}>
+                                            Total
+                                        </div>
+                                    </>
+                                ) : (
+                                    // 无流量时中心显示淡色 0
+                                    <div style={{ fontSize: "52px", fontWeight: 950, color: "rgba(255,255,255,0.1)" }}>
+                                        0
                                     </div>
-                                    <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.62)" }}>
-                                        Pie composition by matched path sources
-                                    </div>
-                                </div>
-
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gap: "10px"
-                                    }}
-                                >
-                                    {topBuckets.map((bucket) => renderLegendRow(bucket, totalSources))}
-                                </div>
-                            </div>
-
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gap: "12px"
-                                }}
-                            >
-                                {topBuckets.map((bucket) => renderBucket(bucket, totalSources))}
-                            </div>
-                        </>
-                    ) : (
-                        <div
-                            style={{
-                                padding: "20px 16px",
-                                borderRadius: "10px",
-                                background: "rgba(255,255,255,0.04)",
-                                border: "1px solid rgba(255,255,255,0.06)",
-                                color: "rgba(255,255,255,0.78)"
-                            }}
-                        >
-                            <div style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>
-                                No matched path sources
-                            </div>
-                            <div style={{ marginTop: "8px", fontSize: "12px", lineHeight: 1.6 }}>
-                                The panel is active, but the current matching chain did not find any path sources for this selection.
+                                )}
                             </div>
                         </div>
-                    )}
+
+                        {/* 右侧详情 / 无流量提示 */}
+                        <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: "18px" }}>
+                            {hasTraffic ? (
+                                topBuckets.map((bucket) => {
+                                    const ratio = ((bucket.sourceCount / totalSources) * 100).toFixed(1);
+                                    const color = kindColorMap[bucket.kind];
+                                    return (
+                                        <div key={bucket.kind} style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                            <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+                                            <div style={{ fontSize: "17px", color: "#FFFFFF", flexGrow: 1, fontWeight: 600 }}>
+                                                {translate(kindLabelKeyMap[bucket.kind], bucket.kind)}
+                                            </div>
+                                            <div style={{ fontSize: "17px", fontWeight: 800, color: "#FFFFFF", width: "55px", textAlign: "right" }}>
+                                                {bucket.sourceCount}
+                                            </div>
+                                            <div style={{ fontSize: "14px", color: "rgba(255, 255, 255, 0.4)", width: "65px", textAlign: "right" }}>
+                                                {ratio}%
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                // 无流量时，No Traffic 字样挪到右侧放大显示
+                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                    <div style={{ 
+                                        fontSize: "44px", 
+                                        fontWeight: 950, 
+                                        color: "#FFFFFF", 
+                                        textTransform: "uppercase",
+                                        letterSpacing: "1px"
+                                    }}>
+                                        No Traffic
+                                    </div>
+                                    {/* 等待字样使用双行显示 */}
+                                    <div style={{ 
+                                        fontSize: "18px", 
+                                        color: "rgba(255, 255, 255, 0.4)", 
+                                        lineHeight: 1.4,
+                                        fontWeight: 500
+                                    }}>
+                                        Waiting for transit data<br />
+                                        to be collected...
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </Portal>
     );
 };
 
-function renderLegendRow(bucket: NormalizedRouteStatisticsBucket, totalSources: number) {
-    const ratio = ((bucket.sourceCount / totalSources) * 100).toFixed(1);
-
-    return (
-        <div
-            key={`legend-${bucket.kind}`}
-            style={{
-                display: "grid",
-                gridTemplateColumns: "14px 1fr auto",
-                alignItems: "center",
-                columnGap: "10px",
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.78)"
-            }}
-        >
-            <div
-                style={{
-                    width: "10px",
-                    height: "10px",
-                    borderRadius: "50%",
-                    background: kindColorMap[bucket.kind]
-                }}
-            />
-            <div>{kindLabelMap[bucket.kind]}</div>
-            <div style={{ color: kindColorMap[bucket.kind] }}>{ratio}%</div>
-        </div>
-    );
-}
-
-function renderBucket(bucket: NormalizedRouteStatisticsBucket, totalSources: number) {
-    const bucketColor = kindColorMap[bucket.kind];
-    const ratio = ((bucket.sourceCount / totalSources) * 100).toFixed(1);
-
-    return (
-        <div
-            key={bucket.kind}
-            style={{
-                padding: "12px 14px",
-                borderRadius: "10px",
-                background: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255,255,255,0.06)"
-            }}
-        >
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "14px 1fr auto auto",
-                    alignItems: "center",
-                    columnGap: "12px"
-                }}
-            >
-                <div
-                    style={{
-                        width: "10px",
-                        height: "10px",
-                        borderRadius: "50%",
-                        background: bucketColor
-                    }}
-                />
-                <div style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>
-                    {kindLabelMap[bucket.kind]}
-                </div>
-                <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                    {bucket.sourceCount} sources
-                </div>
-                <div style={{ fontSize: "13px", color: bucketColor }}>
-                    {ratio}%
-                </div>
-            </div>
-
-            <div
-                style={{
-                    marginTop: "8px",
-                    height: "6px",
-                    borderRadius: "999px",
-                    background: "rgba(255,255,255,0.06)",
-                    overflow: "hidden"
-                }}
-            >
-                <div
-                    style={{
-                        width: `${Math.max(4, (bucket.sourceCount / totalSources) * 100)}%`,
-                        height: "100%",
-                        background: bucketColor
-                    }}
-                />
-            </div>
-
-            <div
-                style={{
-                    marginTop: "10px",
-                    display: "grid",
-                    gap: "6px"
-                }}
-            >
-                {bucket.lines.slice(0, 5).map((line) => renderLine(line))}
-            </div>
-
-            {bucket.truncated && (
-                <div
-                    style={{
-                        marginTop: "8px",
-                        fontSize: "11px",
-                        color: "rgba(255, 180, 120, 0.92)"
-                    }}
-                >
-                    Truncated by vanilla 200-source limit
-                </div>
-            )}
-        </div>
-    );
-}
-
-function renderLine(line: RouteStatisticsLineItem) {
-    return (
-        <div
-            key={line.routeKey}
-            style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto auto",
-                columnGap: "12px",
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.78)"
-            }}
-        >
-            <div
-                style={{
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis"
-                }}
-            >
-                Route #{line.routeKey}
-            </div>
-            <div>{line.sourceCount} hits</div>
-            <div>{line.sampleEdgeCount} edges</div>
-        </div>
-    );
-}
-
+/**
+ * 格式化后端原始数据
+ */
 function normalizePayload(payload: RouteStatisticsPanelPayload): NormalizedRouteStatisticsPanelPayload {
-    const buckets: NormalizedRouteStatisticsBucket[] = [];
+    const bucketMap = new Map<RouteVisualizationKind, NormalizedRouteStatisticsBucket>();
     for (const bucket of payload.buckets ?? []) {
         const normalizedBucket = normalizeBucket(bucket);
         if (normalizedBucket) {
-            buckets.push(normalizedBucket);
+            bucketMap.set(normalizedBucket.kind, normalizedBucket);
         }
     }
 
-    buckets.sort((left, right) => right.sourceCount - left.sourceCount);
+    const buckets = orderedKinds.map((kind) => {
+        return bucketMap.get(kind) ?? {
+            kind,
+            sourceCount: 0,
+            truncated: false,
+            lines: []
+        };
+    });
 
-    return {
-        ...payload,
-        buckets
-    };
+    return { ...payload, buckets };
 }
 
 function normalizeBucket(bucket: RouteStatisticsBucket): NormalizedRouteStatisticsBucket | null {
     const kind = normalizeKind(bucket.kind);
-    if (!kind) {
-        return null;
-    }
-
-    return {
-        ...bucket,
-        kind,
-        lines: bucket.lines ?? []
-    };
+    return kind ? { ...bucket, kind, lines: bucket.lines ?? [] } : null;
 }
 
 function normalizeKind(kind: RouteStatisticsBucket["kind"]): RouteVisualizationKind | null {
-    if (typeof kind === "string" && orderedKinds.includes(kind as RouteVisualizationKind)) {
-        return kind as RouteVisualizationKind;
-    }
-
-    if (typeof kind === "number" && kind >= 0 && kind < orderedKinds.length) {
-        return orderedKinds[kind];
-    }
-
+    if (typeof kind === "string" && orderedKinds.includes(kind as RouteVisualizationKind)) return kind as RouteVisualizationKind;
+    if (typeof kind === "number" && kind >= 0 && kind < orderedKinds.length) return orderedKinds[kind];
     return null;
 }
 
+/**
+ * 构建环形图背景
+ */
 function buildPieGradient(buckets: NormalizedRouteStatisticsBucket[], totalSources: number) {
+    // 无流量时显示白色圆环
+    if (totalSources <= 0) return "rgba(255, 255, 255, 0.85)";
+
     let offset = 0;
-    const stops = buckets.map((bucket) => {
-        const start = offset;
-        offset += (bucket.sourceCount / totalSources) * 360;
-        return `${kindColorMap[bucket.kind]} ${start}deg ${offset}deg`;
-    });
+    const stops = buckets
+        .filter((bucket) => bucket.sourceCount > 0)
+        .map((bucket) => {
+            const start = offset;
+            offset += (bucket.sourceCount / totalSources) * 360;
+            return `${kindColorMap[bucket.kind]} ${start}deg ${offset}deg`;
+        });
 
-    if (stops.length === 0) {
-        return "rgba(255,255,255,0.08)";
-    }
-
-    return `conic-gradient(${stops.join(", ")})`;
+    return stops.length === 0 ? "rgba(255, 255, 255, 0.85)" : `conic-gradient(${stops.join(", ")})`;
 }

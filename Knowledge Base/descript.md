@@ -90,10 +90,13 @@ Transit Scope 是一个 `Cities: Skylines II` 模组。
     - 构建目标集
     - 匹配路径源
     - 追补直接关联 source
-    - 聚合为 6 类统计桶
+    - 基于 ECS 组件做交通分类
+    - 聚合为 9 类统计桶
+    - 在无流量时仍输出完整 bucket 集合
 
 - `RouteStatisticsModels.cs`
   - 统计快照、中间记录、前端 DTO。
+  - 定义最终分类枚举与固定输出顺序。
 
 ### Presentation
 
@@ -149,14 +152,83 @@ Transit Scope 是一个 `Cities: Skylines II` 模组。
 - 从选中实体构建 `TargetSet`
 - 使用 `PathOwner / Target / CurrentLane / NavigationLane` 扫描 path sources
 - 对当前交通工具、乘客、家庭成员等直接关联 source 做追补
-- 按 6 类可视化类型聚合：
-  - `Car`
+- 车类分类优先基于 ECS 组件存在性，而不是字符串匹配
+- 车类分类使用统一入口函数，按“更具体功能组件优先，普通 Car 兜底”的顺序判断
+- 最终按 9 类可视化类型聚合：
+  - `CargoFreight`
+  - `PrivateCar`
+  - `PublicTransport`
+  - `PublicService`
   - `Watercraft`
   - `Aircraft`
   - `Train`
   - `Human`
   - `Bicycle`
 - 每类保留原版等价的 `200 source` 上限
+
+### 车辆分类规则
+
+车类实体的分类优先级如下：
+
+1. `PublicService`
+   - 命中任一公共服务车辆组件时归类到公共服务，例如：
+   - `Ambulance`
+   - `FireEngine`
+   - `GarbageTruck`
+   - `Hearse`
+   - `MaintenanceVehicle`
+   - `ParkMaintenanceVehicle`
+   - `PoliceCar`
+   - `PostVan`
+   - `PrisonerTransport`
+   - `RoadMaintenanceVehicle`
+   - `WorkVehicle`
+
+2. `PublicTransport`
+   - 命中 `PublicTransport`、`PassengerTransport`、`Taxi`
+
+3. `CargoFreight`
+   - 命中 `CargoTransport`、`DeliveryTruck`、`GoodsDeliveryVehicle`
+
+4. `PrivateCar`
+   - 命中 `PersonalCar`
+   - 或命中 `Car` 且不属于以上三类
+
+其余大类保持：
+
+- `Watercraft`
+- `Aircraft`
+- `Train`
+- `Human`
+- `Bicycle`
+
+### 分类候选实体
+
+为了避免只检查单一实体导致误判，分类时会依次检查一组候选实体：
+
+- 当前 `source entity`
+- `Controller`
+- `CurrentVehicle`
+- `CurrentVehicle` 对应的 `Controller`
+
+这样可以兼容路径源实体、控制器实体和当前载具实体之间的差异，同时保持分类逻辑集中、可维护、可扩展。
+
+## UI 展示约定
+
+- 前端只消费后端输出的 bucket，不自行推断统计类别
+- 饼图、legend、tooltip 都以 `RouteVisualizationKind` 的固定顺序和本地化 key 为准
+- `Car` 不再作为最终展示项出现，界面上只显示细分后的四类车流
+
+### 无流量显示规则
+
+当 `matchedSourceCount == 0` 时：
+
+- 后端仍然输出完整的 9 个 bucket，所有 `sourceCount = 0`
+- 前端仍然显示完整饼图区域
+- 饼图使用安全的占位渲染，不做除零计算
+- 中央文案显示 `no traffic`
+- legend 仍保留全部分类项
+- 不允许出现 `null` 面板、`NaN`、`Infinity` 或空 legend 崩溃
 
 ## 构建与部署
 

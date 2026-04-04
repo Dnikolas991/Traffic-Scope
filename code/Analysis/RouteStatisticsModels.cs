@@ -9,16 +9,39 @@ using Unity.Entities;
 namespace Transit_Scope.code
 {
     /// <summary>
-    /// The six visualization buckets mirrored from the vanilla traffic route view.
+    /// 交通统计面板使用的最终分类。
+    /// 这里不再直接镜像原版 6 类，而是对 Car 做进一步细分。
     /// </summary>
     internal enum RouteVisualizationKind
     {
-        Car = 0,
-        Watercraft = 1,
-        Aircraft = 2,
-        Train = 3,
-        Human = 4,
-        Bicycle = 5
+        CargoFreight = 0,
+        PrivateCar = 1,
+        PublicTransport = 2,
+        PublicService = 3,
+        Watercraft = 4,
+        Aircraft = 5,
+        Train = 6,
+        Human = 7,
+        Bicycle = 8
+    }
+
+    internal static class RouteVisualizationKinds
+    {
+        /// <summary>
+        /// 固定输出顺序，保证后端聚合和前端展示一致。
+        /// </summary>
+        public static readonly RouteVisualizationKind[] Ordered =
+        {
+            RouteVisualizationKind.CargoFreight,
+            RouteVisualizationKind.PrivateCar,
+            RouteVisualizationKind.PublicTransport,
+            RouteVisualizationKind.PublicService,
+            RouteVisualizationKind.Watercraft,
+            RouteVisualizationKind.Aircraft,
+            RouteVisualizationKind.Train,
+            RouteVisualizationKind.Human,
+            RouteVisualizationKind.Bicycle
+        };
     }
 
     /// <summary>
