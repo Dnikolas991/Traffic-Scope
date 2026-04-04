@@ -3,7 +3,7 @@
 ## English
 
 ### Overview
-Transit Scope is an information-inspection mod designed to help players quickly select and inspect the traffic composition of different transport networks in the game, making traffic planning easier and more intuitive.
+Transit Scope is an information-inspection mod designed to help players quickly select and inspect the traffic composition of different transport systems in the game, making traffic planning easier and more intuitive.
 
 This mod is the spiritual successor to the original *Traffic Volume*.
 
@@ -18,18 +18,19 @@ The mod currently provides:
 - Retains the vanilla selection behavior after confirming a selection
 - Clean hover outline for buildings
 - Displays the traffic composition of selected roads or tracks with a pie chart
-- Displays basic information of selected buildings in a graphical format
+- Displays basic information for selected buildings in a graphical format
 
 ### Future Plans
-This is my first mod, so please excuse its shortcomings. Although I am a computer science student, game engineering is not my main field, and I am not yet fully proficient with C# or Unity. Special thanks to Codex for its outstanding contributions to the code.
+This is my first mod, so please excuse its shortcomings. Although I am a computer science student, game engineering is not my main field, and I am not yet fully proficient with C# or Unity.
 
 If you have any feedback or suggestions, feel free to contact me.
 
 In the future, I will try to implement:
 1. Building hover outlines closer to the vanilla game style
-2. Line-related features more similar to the vanilla game
-3. Entry points next to outside connections (if you know how to hook this up, I would really appreciate your help)
+2. Smarter automatic activation of the traffic routes tool
+3. An entry point next to the outside connection button
 4. A UI style closer to other well-known mods
+5. Customizable item colors, fonts, sizes, and hotkeys
 
 ## 中文
 
@@ -52,14 +53,13 @@ Transit Scope 是一个信息查看类模组，主要用于在游戏中快速选
 - 用图形化方式展示所选建筑的基础信息
 
 ### 未来展望
-这是我的第一个模组，有许多不足之处请见谅。尽管我是计算机科学专业的学生，但我的主科并不是游戏工程，我对于 C# 及 Unity 并不完全熟练。感谢 Codex 对代码做出的卓越贡献。
+这是我的第一个模组，有许多不足之处请见谅。尽管我是计算机科学专业的学生，但我的主科并不是游戏工程，我对于 C# 及 Unity 并不完全熟练。
 
 有任何反馈和建议，欢迎与我联系。
 
 未来会尝试实现：
 1. 与原版相似的建筑悬停描边效果
-2. 与原版相似的线路功能
-3. 在对外连接旁边添加入口
+2. 智能开启交通路线工具
+3. 在对外连接按钮旁边添加入口
 4. 与其他知名模组相似的 UI
-
-如果你知道第 3 点该如何挂载，欢迎告诉我。
+5. 自定义条目颜色、字体、大小、快捷键
