@@ -10,21 +10,17 @@ using UnityEngine.InputSystem;
 namespace Transit_Scope.code
 {
     /// <summary>
-    /// Transit Scope 自定义选择工具。
-    /// 
-    /// 该工具只做一件事：把玩家当前 Hover / Confirm 的对象
-    /// 统一解析成“道路边”或“建筑”这两类业务对象，并把选择状态暴露给其他系统。
+    /// Custom selection tool for Transit Scope.
+    /// It resolves the hovered or confirmed hit into a display entity and a source entity.
     /// </summary>
     public partial class SelectionToolSystem : ToolBaseSystem
     {
-        //状态：是否在选择模式
         public enum State
         {
             Default,
             Selecting
         }
 
-        //命中对象类型
         public enum SelectionKind
         {
             None = 0,
@@ -32,35 +28,30 @@ namespace Transit_Scope.code
             Building = 2
         }
 
-        //原版工具系统
         private ToolSystem m_GameToolSystem;
         private State m_State = State.Default;
 
-        //悬停对象
         public Entity HoveredEntity { get; private set; } = Entity.Null;
         public SelectionKind HoveredKind { get; private set; } = SelectionKind.None;
+        public Entity HoveredSourceEntity { get; private set; } = Entity.Null;
 
-        //选择对象
         public Entity SelectedEntity { get; private set; } = Entity.Null;
         public SelectionKind SelectedKind { get; private set; } = SelectionKind.None;
+        public Entity SelectedSourceEntity { get; private set; } = Entity.Null;
+        public int SelectedIndex => m_GameToolSystem?.selectedIndex ?? -1;
 
         /// <summary>
-        /// 用于通知统计系统“这次选择刚刚发生变化，需要立即刷新”。
+        /// Signals that the confirmed selection changed this frame.
         /// </summary>
         public bool HasNewSelection { get; private set; }
 
-        //公开的便捷属性提供状态
         public bool IsSelecting => m_State == State.Selecting;
 
-        /// <summary>
-        /// 当 Hover 对象和已确认对象一致时，不再重复绘制 Hover 高亮。
-        /// </summary>
         public bool HasConfirmedHoveredTarget =>
             SelectedEntity != Entity.Null &&
             SelectedEntity == HoveredEntity &&
             SelectedKind == HoveredKind;
 
-        //悬停高亮的总开关
         public bool ShouldRenderHoverOverlay =>
             IsSelecting &&
             HoveredEntity != Entity.Null &&
@@ -73,7 +64,6 @@ namespace Transit_Scope.code
         {
             base.OnCreate();
 
-            //创建时默认处于关闭状态
             m_GameToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
             Enabled = false;
         }
@@ -98,7 +88,6 @@ namespace Transit_Scope.code
             Logger.Info("选择模式已关闭。");
         }
 
-        //强制要求实现的接口，本工具不进行修改
         public override PrefabBase GetPrefab()
         {
             return null;
@@ -118,7 +107,6 @@ namespace Transit_Scope.code
 
             ResetState();
 
-            //从别的工具切换过来时清楚状态
             if (m_GameToolSystem.activeTool != this)
             {
                 m_GameToolSystem.selected = Entity.Null;
@@ -147,18 +135,16 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 确认当前 Hover 对象。
-        /// 如果再次点击同一对象，则视为取消选择。
+        /// Confirms the current hovered target.
+        /// Clicking the same object again clears the selection.
         /// </summary>
         public void ConfirmHoveredTarget()
         {
-            //防止选中过程中实体失效
             if (!IsValidSelection(HoveredEntity, HoveredKind))
             {
                 return;
             }
 
-            //再次点击取消选择
             if (SelectedEntity != Entity.Null &&
                 SelectedEntity == HoveredEntity &&
                 SelectedKind == HoveredKind)
@@ -168,9 +154,9 @@ namespace Transit_Scope.code
                 return;
             }
 
-            //更新选择
             SelectedEntity = HoveredEntity;
             SelectedKind = HoveredKind;
+            SelectedSourceEntity = HoveredSourceEntity;
             HasNewSelection = true;
 
             UpdateNativeSelectionMarker();
@@ -190,32 +176,26 @@ namespace Transit_Scope.code
             ClearSelectionInternal();
         }
 
-        //给后端消费选择对象
         public void ClearNewSelectionFlag()
         {
             HasNewSelection = false;
         }
 
-        //框架接入部分
         public override void InitializeRaycast()
         {
             base.InitializeRaycast();
 
-            //允许命中地上高架地下（地下功能待实现）
             m_ToolRaycastSystem.collisionMask =
                 CollisionMask.OnGround | CollisionMask.Overground | CollisionMask.Underground;
 
-            // 同时允许命中道路网络和静态物体，满足道路/建筑混合选择需求。
             m_ToolRaycastSystem.typeMask = TypeMask.Net | TypeMask.StaticObjects;
 
-            //允许命中子物体
             m_ToolRaycastSystem.raycastFlags =
                 RaycastFlags.SubElements |
                 RaycastFlags.Cargo |
                 RaycastFlags.Passenger |
                 RaycastFlags.EditorContainers;
 
-            // 补充轨道相关层，保证铁路、地铁、有轨电车都可以被命中。
             m_ToolRaycastSystem.netLayerMask =
                 Layer.Road |
                 Layer.PublicTransportRoad |
@@ -224,28 +204,23 @@ namespace Transit_Scope.code
                 Layer.SubwayTrack |
                 Layer.TramTrack;
 
-            //不让 UI 图标层干扰命中
             m_ToolRaycastSystem.iconLayerMask = IconLayerMask.None;
-            //不让公用设施类型过滤参与
             m_ToolRaycastSystem.utilityTypeMask = UtilityTypes.None;
         }
 
         protected override JobHandle OnUpdate(JobHandle inputDeps)
         {
-            //焦点变化不处理(切换窗口等)
             if (m_FocusChanged)
             {
                 return inputDeps;
             }
 
-            //只有自己是激活工具才进行处理
             if (m_GameToolSystem == null || m_GameToolSystem.activeTool != this)
             {
                 return inputDeps;
             }
 
             HasNewSelection = false;
-            //更新悬停对象，支持预览功能
             UpdateHoveredTarget();
 
             if (SelectedEntity != Entity.Null && !EntityManager.Exists(SelectedEntity))
@@ -253,7 +228,6 @@ namespace Transit_Scope.code
                 ClearSelectionInternal();
             }
 
-            //每帧都把选中对象同步为工具的选中对象
             UpdateNativeSelectionMarker();
 
             if (CanAcceptSceneClick() && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
@@ -261,7 +235,6 @@ namespace Transit_Scope.code
                 ConfirmHoveredTarget();
             }
 
-            //右键清楚
             if (CanAcceptSceneClick() && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
             {
                 ClearSelectionInternal();
@@ -286,8 +259,8 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 只把已经确认的对象写回原版 selected 标记。
-        /// Hover 对象不应污染原版选中状态。
+        /// Writes the confirmed selection back to the vanilla tool state.
+        /// Source entity is preferred so statistics stay aligned with the game.
         /// </summary>
         private void UpdateNativeSelectionMarker()
         {
@@ -296,15 +269,19 @@ namespace Transit_Scope.code
                 return;
             }
 
-            m_GameToolSystem.selected = SelectedEntity;
+            m_GameToolSystem.selected = SelectedSourceEntity != Entity.Null
+                ? SelectedSourceEntity
+                : SelectedEntity;
         }
 
         private void ResetState()
         {
             HoveredEntity = Entity.Null;
             HoveredKind = SelectionKind.None;
+            HoveredSourceEntity = Entity.Null;
             SelectedEntity = Entity.Null;
             SelectedKind = SelectionKind.None;
+            SelectedSourceEntity = Entity.Null;
             HasNewSelection = false;
         }
 
@@ -315,21 +292,22 @@ namespace Transit_Scope.code
         }
 
         /// <summary>
-        /// 每帧更新 Hover 对象。
-        /// 优先解析道路，解析失败后再尝试解析建筑。
+        /// Resolves the current raycast hit into hover state.
+        /// Roads are preferred; buildings are used as fallback.
         /// </summary>
         private void UpdateHoveredTarget()
         {
             HoveredEntity = Entity.Null;
             HoveredKind = SelectionKind.None;
+            HoveredSourceEntity = Entity.Null;
 
-            //从工具射线系统获取命中实体
             if (!GetRaycastResult(out Entity hitEntity, out _))
             {
                 return;
             }
 
-            //先认为命中道路并在命中子组件时还原为大道路
+            HoveredSourceEntity = hitEntity;
+
             Entity roadEntity = EntityResolver.ResolveRoadEdge(EntityManager, hitEntity);
             if (EntityResolver.IsRoad(EntityManager, roadEntity))
             {
@@ -338,7 +316,6 @@ namespace Transit_Scope.code
                 return;
             }
 
-            //不是道路则尝试解析建筑
             Entity buildingEntity = EntityResolver.ResolveBuildingEntity(EntityManager, hitEntity);
             if (EntityResolver.IsBuilding(EntityManager, buildingEntity))
             {
@@ -347,7 +324,6 @@ namespace Transit_Scope.code
             }
         }
 
-        //脏态防御
         private bool IsValidSelection(Entity entity, SelectionKind kind)
         {
             return kind switch

@@ -99,7 +99,7 @@ namespace Transit_Scope.code
         /// <summary>
         /// 向前端推送新的统计卡片数据。
         /// </summary>
-        internal void PresentStats(SelectionStats stats)
+        internal void PresentStats(RouteStatisticsPanelPayload stats)
         {
             if (stats == null)
             {
@@ -108,7 +108,13 @@ namespace Transit_Scope.code
             }
 
             m_HasStatsBinding.Update(true);
-            m_StatsJsonBinding.Update(stats.ToJson());
+            string json = stats.ToJson();
+            m_StatsJsonBinding.Update(json);
+
+            Logger.Info(
+                $"[RouteStats] PresentStats selected={stats.SelectedKind}#{stats.SelectedEntityIndex} " +
+                $"targets={stats.TargetCount} matchedSources={stats.MatchedSourceCount} " +
+                $"buckets={stats.Buckets.Count} jsonLength={json.Length}");
         }
 
         /// <summary>
@@ -118,6 +124,7 @@ namespace Transit_Scope.code
         {
             m_HasStatsBinding.Update(false);
             m_StatsJsonBinding.Update(string.Empty);
+            Logger.Info("[RouteStats] ClearStats");
         }
     }
 }

@@ -1,26 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import { Portal } from "cs2/ui";
 import { useValue } from "cs2/api";
-import { useLocalization } from "cs2/l10n";
 import { hasStatsBinding, isActiveBinding, statsJsonBinding } from "./bindings";
-
-interface StatItem {
-    labelKey?: string;
-    label: string;
-    value: number;
-    color: string;
-}
-
-interface StatsPayload {
-    titleKey?: string;
-    title: string;
-    subtitleKey?: string;
-    subtitleArg?: string;
-    subtitle: string;
-    total: number;
-    displayTotal?: number;
-    items: StatItem[];
-}
+import type { RouteStatisticsBucket, RouteStatisticsLineItem, RouteStatisticsPanelPayload, RouteVisualizationKind } from "./routeStatsContracts";
 
 interface AnchorPosition {
     x: number;
@@ -31,52 +13,58 @@ interface Props {
     anchor: AnchorPosition | null;
 }
 
+interface NormalizedRouteStatisticsBucket extends Omit<RouteStatisticsBucket, "kind"> {
+    kind: RouteVisualizationKind;
+}
+
+interface NormalizedRouteStatisticsPanelPayload extends Omit<RouteStatisticsPanelPayload, "buckets"> {
+    buckets: NormalizedRouteStatisticsBucket[];
+}
+
+const orderedKinds: RouteVisualizationKind[] = ["Car", "Watercraft", "Aircraft", "Train", "Human", "Bicycle"];
+
+const kindLabelMap: Record<RouteVisualizationKind, string> = {
+    Car: "Car",
+    Watercraft: "Watercraft",
+    Aircraft: "Aircraft",
+    Train: "Train",
+    Human: "Human",
+    Bicycle: "Bicycle"
+};
+
+const kindColorMap: Record<RouteVisualizationKind, string> = {
+    Car: "#5DB7FF",
+    Watercraft: "#4FC6F0",
+    Aircraft: "#F28DDA",
+    Train: "#C38BFF",
+    Human: "#D6E2F0",
+    Bicycle: "#60D5C0"
+};
+
 export const StatsPanel = ({ anchor }: Props) => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
-    const { translate } = useLocalization();
-    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-    const localize = (key: string | undefined, fallback: string, arg?: string): string => {
-        const template = key ? (translate(key, fallback) ?? fallback) : fallback;
-        return arg !== undefined ? template.replace("{0}", arg) : template;
-    };
 
     if (!isActive || !hasStats || !statsJson || !anchor) {
         return null;
     }
 
-    let payload: StatsPayload | null = null;
+    let payload: NormalizedRouteStatisticsPanelPayload | null = null;
     try {
-        payload = JSON.parse(statsJson) as StatsPayload;
+        payload = normalizePayload(JSON.parse(statsJson) as RouteStatisticsPanelPayload);
     } catch (error) {
-        console.error("Scope stats parse failed:", error);
+        console.error("Transit Scope route stats parse failed:", error);
         return null;
     }
 
-    if (!payload || !payload.items || payload.items.length === 0) {
+    if (!payload) {
         return null;
     }
 
-    const chartTotal = Math.max(1, payload.total || 0);
-    const displayTotal = payload.displayTotal ?? payload.total ?? 0;
-    let currentAngle = 0;
-
-    const segments = payload.items.map((item) => {
-        const slice = (item.value / chartTotal) * 360;
-        const start = currentAngle;
-        const end = currentAngle + slice;
-        currentAngle = end;
-        return `${item.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
-    });
-
-    const pieStyle = {
-        background: `conic-gradient(${segments.join(", ")})`
-    } as React.CSSProperties;
-
-    const localizedTitle = localize(payload.titleKey, payload.title);
-    const localizedSubtitle = localize(payload.subtitleKey, payload.subtitle, payload.subtitleArg);
+    const topBuckets = payload.buckets.slice(0, 6);
+    const totalSources = Math.max(1, payload.matchedSourceCount || 0);
+    const pieBackground = buildPieGradient(topBuckets, totalSources);
 
     return (
         <Portal>
@@ -86,13 +74,12 @@ export const StatsPanel = ({ anchor }: Props) => {
                     top: `${anchor.y}px`,
                     left: `${anchor.x}px`,
                     pointerEvents: "auto",
-                    width: "580px",
+                    width: "720px",
                     borderRadius: "12px",
                     overflow: "hidden",
                     background: "linear-gradient(145deg, rgba(32, 38, 45, 0.98) 0%, rgba(20, 24, 28, 0.98) 100%)",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
-                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.05)",
-                    transition: "all 0.2s ease-in-out"
+                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)"
                 }}
             >
                 <div
@@ -101,161 +88,349 @@ export const StatsPanel = ({ anchor }: Props) => {
                         background: "rgba(0, 0, 0, 0.25)",
                         borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
                         display: "flex",
-                        alignItems: "baseline",
                         justifyContent: "space-between",
+                        alignItems: "baseline",
                         gap: "16px"
                     }}
                 >
-                    <div
-                        style={{
-                            fontSize: "16px",
-                            fontWeight: 800,
-                            color: "var(--accentColorNormal, #8fd5ff)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.8px"
-                        }}
-                    >
-                        {localizedTitle}
-                    </div>
-                    <div
-                        style={{
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            color: "rgba(255, 255, 255, 0.55)",
-                            fontStyle: "italic",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis"
-                        }}
-                    >
-                        {localizedSubtitle}
-                    </div>
-                </div>
-
-                <div
-                    style={{
-                        padding: "24px 20px",
-                        display: "grid",
-                        gridTemplateColumns: "200px 1fr",
-                        columnGap: "24px",
-                        alignItems: "center"
-                    }}
-                >
-                    <div
-                        style={{
-                            position: "relative",
-                            width: "180px",
-                            height: "180px",
-                            borderRadius: "50%",
-                            padding: "4px",
-                            background: "rgba(0, 0, 0, 0.3)",
-                            boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.4)"
-                        }}
-                    >
+                    <div>
                         <div
                             style={{
-                                width: "100%",
-                                height: "100%",
-                                borderRadius: "50%",
-                                ...pieStyle,
-                                transform: hoveredIndex !== null ? "scale(1.02)" : "scale(1)",
-                                transition: "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
-                            }}
-                        />
-                        <div
-                            style={{
-                                position: "absolute",
-                                inset: "34px",
-                                borderRadius: "50%",
-                                background: "linear-gradient(135deg, #1a1f26 0%, #0d1014 100%)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
-                                boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                zIndex: 2
+                                fontSize: "16px",
+                                fontWeight: 800,
+                                color: "var(--accentColorNormal, #8fd5ff)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.8px"
                             }}
                         >
-                            <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.45)", fontWeight: 600 }}>
-                                {localize("stats.total", "TOTAL")}
-                            </div>
-                            <div style={{ fontSize: "32px", fontWeight: 800, color: "#FFFFFF", textShadow: "0 0 12px rgba(255,255,255,0.1)" }}>
-                                {displayTotal}
-                            </div>
+                            Route Statistics
+                        </div>
+                        <div
+                            style={{
+                                fontSize: "12px",
+                                color: "rgba(255,255,255,0.55)"
+                            }}
+                        >
+                            Selected {payload.selectedKind} #{payload.selectedEntity}
                         </div>
                     </div>
 
                     <div
                         style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px"
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, auto)",
+                            gap: "4px 16px",
+                            fontSize: "12px",
+                            color: "rgba(255,255,255,0.72)"
                         }}
                     >
-                        {payload.items.map((item, index) => {
-                            const percent = ((item.value / chartTotal) * 100).toFixed(1);
-                            const localizedLabel = localize(item.labelKey, item.label);
-                            const isHovered = hoveredIndex === index;
+                        <div>Targets: {payload.targetCount}</div>
+                        <div>Matched Sources: {payload.matchedSourceCount}</div>
+                        <div>Buckets: {payload.buckets.length}</div>
+                    </div>
+                </div>
 
-                            return (
+                <div
+                    style={{
+                        padding: "18px 20px 20px",
+                        display: "grid",
+                        gap: "16px"
+                    }}
+                >
+                    {topBuckets.length > 0 ? (
+                        <>
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "220px 1fr",
+                                    gap: "18px",
+                                    alignItems: "center",
+                                    padding: "14px",
+                                    borderRadius: "10px",
+                                    background: "rgba(255,255,255,0.04)",
+                                    border: "1px solid rgba(255,255,255,0.06)"
+                                }}
+                            >
                                 <div
-                                    key={`${item.labelKey || item.label}-${item.color}`}
-                                    onMouseEnter={() => setHoveredIndex(index)}
-                                    onMouseLeave={() => setHoveredIndex(null)}
                                     style={{
                                         display: "grid",
-                                        gridTemplateColumns: "12px 1fr auto",
-                                        alignItems: "center",
-                                        columnGap: "12px",
-                                        padding: "10px 14px",
-                                        borderRadius: "8px",
-                                        background: isHovered ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
-                                        border: "1px solid",
-                                        borderColor: isHovered ? "rgba(255, 255, 255, 0.12)" : "transparent",
-                                        transition: "all 0.15s ease",
-                                        cursor: "default"
+                                        justifyItems: "center",
+                                        gap: "10px"
                                     }}
                                 >
                                     <div
                                         style={{
-                                            width: "8px",
-                                            height: "8px",
+                                            width: "164px",
+                                            height: "164px",
                                             borderRadius: "50%",
-                                            background: item.color,
-                                            boxShadow: isHovered ? `0 0 8px ${item.color}` : "none",
-                                            transition: "box-shadow 0.2s ease"
-                                        }}
-                                    />
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: 500,
-                                            color: isHovered ? "#FFFFFF" : "rgba(255, 255, 255, 0.85)",
-                                            whiteSpace: "nowrap",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis"
+                                            background: pieBackground,
+                                            position: "relative",
+                                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.07)"
                                         }}
                                     >
-                                        {localizedLabel}
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                inset: "26px",
+                                                borderRadius: "50%",
+                                                background: "rgba(20, 24, 28, 0.96)",
+                                                display: "grid",
+                                                placeItems: "center",
+                                                textAlign: "center",
+                                                boxShadow: "0 0 0 1px rgba(255,255,255,0.05)"
+                                            }}
+                                        >
+                                            <div>
+                                                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.7px" }}>
+                                                    Total
+                                                </div>
+                                                <div style={{ fontSize: "28px", fontWeight: 800, color: "#FFFFFF", lineHeight: 1.1 }}>
+                                                    {payload.matchedSourceCount}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: 700,
-                                            color: isHovered ? "var(--accentColorNormal, #8fd5ff)" : "#FFFFFF",
-                                            minWidth: "45px",
-                                            textAlign: "right"
-                                        }}
-                                    >
-                                        {percent}%
+                                    <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.62)" }}>
+                                        Pie composition by matched path sources
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
+
+                                <div
+                                    style={{
+                                        display: "grid",
+                                        gap: "10px"
+                                    }}
+                                >
+                                    {topBuckets.map((bucket) => renderLegendRow(bucket, totalSources))}
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gap: "12px"
+                                }}
+                            >
+                                {topBuckets.map((bucket) => renderBucket(bucket, totalSources))}
+                            </div>
+                        </>
+                    ) : (
+                        <div
+                            style={{
+                                padding: "20px 16px",
+                                borderRadius: "10px",
+                                background: "rgba(255,255,255,0.04)",
+                                border: "1px solid rgba(255,255,255,0.06)",
+                                color: "rgba(255,255,255,0.78)"
+                            }}
+                        >
+                            <div style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>
+                                No matched path sources
+                            </div>
+                            <div style={{ marginTop: "8px", fontSize: "12px", lineHeight: 1.6 }}>
+                                The panel is active, but the current matching chain did not find any path sources for this selection.
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </Portal>
     );
 };
+
+function renderLegendRow(bucket: NormalizedRouteStatisticsBucket, totalSources: number) {
+    const ratio = ((bucket.sourceCount / totalSources) * 100).toFixed(1);
+
+    return (
+        <div
+            key={`legend-${bucket.kind}`}
+            style={{
+                display: "grid",
+                gridTemplateColumns: "14px 1fr auto",
+                alignItems: "center",
+                columnGap: "10px",
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.78)"
+            }}
+        >
+            <div
+                style={{
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "50%",
+                    background: kindColorMap[bucket.kind]
+                }}
+            />
+            <div>{kindLabelMap[bucket.kind]}</div>
+            <div style={{ color: kindColorMap[bucket.kind] }}>{ratio}%</div>
+        </div>
+    );
+}
+
+function renderBucket(bucket: NormalizedRouteStatisticsBucket, totalSources: number) {
+    const bucketColor = kindColorMap[bucket.kind];
+    const ratio = ((bucket.sourceCount / totalSources) * 100).toFixed(1);
+
+    return (
+        <div
+            key={bucket.kind}
+            style={{
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255,255,255,0.06)"
+            }}
+        >
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "14px 1fr auto auto",
+                    alignItems: "center",
+                    columnGap: "12px"
+                }}
+            >
+                <div
+                    style={{
+                        width: "10px",
+                        height: "10px",
+                        borderRadius: "50%",
+                        background: bucketColor
+                    }}
+                />
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>
+                    {kindLabelMap[bucket.kind]}
+                </div>
+                <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
+                    {bucket.sourceCount} sources
+                </div>
+                <div style={{ fontSize: "13px", color: bucketColor }}>
+                    {ratio}%
+                </div>
+            </div>
+
+            <div
+                style={{
+                    marginTop: "8px",
+                    height: "6px",
+                    borderRadius: "999px",
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden"
+                }}
+            >
+                <div
+                    style={{
+                        width: `${Math.max(4, (bucket.sourceCount / totalSources) * 100)}%`,
+                        height: "100%",
+                        background: bucketColor
+                    }}
+                />
+            </div>
+
+            <div
+                style={{
+                    marginTop: "10px",
+                    display: "grid",
+                    gap: "6px"
+                }}
+            >
+                {bucket.lines.slice(0, 5).map((line) => renderLine(line))}
+            </div>
+
+            {bucket.truncated && (
+                <div
+                    style={{
+                        marginTop: "8px",
+                        fontSize: "11px",
+                        color: "rgba(255, 180, 120, 0.92)"
+                    }}
+                >
+                    Truncated by vanilla 200-source limit
+                </div>
+            )}
+        </div>
+    );
+}
+
+function renderLine(line: RouteStatisticsLineItem) {
+    return (
+        <div
+            key={line.routeKey}
+            style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto auto",
+                columnGap: "12px",
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.78)"
+            }}
+        >
+            <div
+                style={{
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis"
+                }}
+            >
+                Route #{line.routeKey}
+            </div>
+            <div>{line.sourceCount} hits</div>
+            <div>{line.sampleEdgeCount} edges</div>
+        </div>
+    );
+}
+
+function normalizePayload(payload: RouteStatisticsPanelPayload): NormalizedRouteStatisticsPanelPayload {
+    const buckets: NormalizedRouteStatisticsBucket[] = [];
+    for (const bucket of payload.buckets ?? []) {
+        const normalizedBucket = normalizeBucket(bucket);
+        if (normalizedBucket) {
+            buckets.push(normalizedBucket);
+        }
+    }
+
+    buckets.sort((left, right) => right.sourceCount - left.sourceCount);
+
+    return {
+        ...payload,
+        buckets
+    };
+}
+
+function normalizeBucket(bucket: RouteStatisticsBucket): NormalizedRouteStatisticsBucket | null {
+    const kind = normalizeKind(bucket.kind);
+    if (!kind) {
+        return null;
+    }
+
+    return {
+        ...bucket,
+        kind,
+        lines: bucket.lines ?? []
+    };
+}
+
+function normalizeKind(kind: RouteStatisticsBucket["kind"]): RouteVisualizationKind | null {
+    if (typeof kind === "string" && orderedKinds.includes(kind as RouteVisualizationKind)) {
+        return kind as RouteVisualizationKind;
+    }
+
+    if (typeof kind === "number" && kind >= 0 && kind < orderedKinds.length) {
+        return orderedKinds[kind];
+    }
+
+    return null;
+}
+
+function buildPieGradient(buckets: NormalizedRouteStatisticsBucket[], totalSources: number) {
+    let offset = 0;
+    const stops = buckets.map((bucket) => {
+        const start = offset;
+        offset += (bucket.sourceCount / totalSources) * 360;
+        return `${kindColorMap[bucket.kind]} ${start}deg ${offset}deg`;
+    });
+
+    if (stops.length === 0) {
+        return "rgba(255,255,255,0.08)";
+    }
+
+    return `conic-gradient(${stops.join(", ")})`;
+}

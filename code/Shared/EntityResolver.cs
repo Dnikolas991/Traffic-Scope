@@ -100,6 +100,16 @@ namespace Transit_Scope.code
             return Entity.Null;
         }
 
+        public static Entity ResolveOwnerRootEntity(EntityManager entityManager, Entity entity)
+        {
+            if (entity == Entity.Null || !entityManager.Exists(entity))
+            {
+                return Entity.Null;
+            }
+
+            return ResolveOwnerRoot(entityManager, entity);
+        }
+
         private static Entity ResolveOwnerRoot(EntityManager entityManager, Entity entity)
         {
             Entity current = entity;

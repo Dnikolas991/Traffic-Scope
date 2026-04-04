@@ -119,19 +119,4 @@
         <Exec Command="npm run build" WorkingDirectory="$(ProjectDir)/UI" />
     </Target>
 
-    <Target Name="RunModPostProcessor" AfterTargets="AfterBuild" Condition="'$(RunGameToolchainTargets)' == 'true' AND '$(NeedBuild)'">
-        <Error Condition="!Exists('$(ModPostProcessorFullPath)')" Text="Post processor not found, please check the path: $(ModPostProcessorFullPath)" />
-        <Message Text="Run post processor: $(ModPostProcessorArgs)" Importance="high" />
-        <Exec Command="$(ModPostProcessorArgs)" LogStandardErrorAsError="true" />
-    </Target>
-
-    <Target Name="DeployWIP" AfterTargets="AfterBuild" Condition="'$(RunGameToolchainTargets)' == 'true' AND '$(NeedBuild)'">
-        <ItemGroup>
-            <FilesToDeploy Include="$(OutDir)\**\*.*" />
-        </ItemGroup>
-        <Message Text="Copy output to deploy directory $(DeployDir)" Importance="high" />
-        <RemoveDir Directories="$(DeployDir)" />
-        <Copy SourceFiles="@(FilesToDeploy)" DestinationFiles="@(FilesToDeploy->'$(DeployDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
-    </Target>
-
 </Project>
