@@ -77,7 +77,10 @@ In the future, I will try to implement:<br/>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.jpg" />
 	<!--Screenshot, can be set multiple times-->
-	<Screenshot Value="" />
+	<Screenshot Value="Properties/1.jpg" />
+	<Screenshot Value="Properties/2.jpg" />
+	<Screenshot Value="Properties/3.jpg" />
+	<Screenshot Value="Properties/4.jpg" />
 	<!--Tag, can be set multiple times-->
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/traffic-scope.1915698/" />
