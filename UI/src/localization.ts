@@ -1,42 +1,39 @@
-import enUS from "../../lang/en-US.json";
-import zhHans from "../../lang/zh-HANS.json";
-import deDE from "../../lang/de-DE.json";
+/**
+ * 本地化适配器
+ * 
+ * 修复：cs2/l10n 模块不直接导出 l10n 对象，而是提供 useLocalization (useCachedLocalization) Hook。
+ */
 
-type Dictionary = Record<string, string>;
-
-const dictionaries: Record<string, Dictionary> = {
-    en: enUS,
-    zh: zhHans,
-    de: deDE
-};
+import { useLocalization } from "cs2/l10n";
+import { useCallback } from "react";
 
 /**
- * 根据浏览器/游戏当前语言挑选最接近的字典。
- * 这里优先支持英语、简体中文和德语，其它语言回退到英文。
+ * 自定义 Hook，用于在组件中获取翻译函数
  */
-export const getCurrentDictionary = (): Dictionary => {
-    const locale = (window.navigator.language || "en-US").toLowerCase();
+export const useTranslate = () => {
+    const { translate: gameTranslate } = useLocalization();
 
-    if (locale.startsWith("zh")) {
-        return dictionaries.zh;
-    }
+    /**
+     * 翻译执行函数
+     * @param key 翻译键值
+     * @param fallback 找不到键值时的后备文本
+     * @param arg 可选参数，用于替换 {0}
+     */
+    return useCallback((key: string | undefined, fallback: string, arg?: string): string => {
+        if (!key) return fallback;
 
-    if (locale.startsWith("de")) {
-        return dictionaries.de;
-    }
+        // 调用游戏原生的 translate 方法
+        const translated = gameTranslate(key, fallback);
 
-    return dictionaries.en;
-};
+        if (!translated || translated === key) {
+            return fallback;
+        }
 
-/**
- * 简单的单参数格式化，支持 `{0}` 占位符。
- */
-export const translate = (key: string | undefined, fallback: string, arg?: string): string => {
-    if (!key) {
-        return fallback;
-    }
+        // 处理 {0} 占位符替换
+        if (arg !== undefined) {
+            return translated.replace("{0}", arg);
+        }
 
-    const dictionary = getCurrentDictionary();
-    const template = dictionary[key] || fallback || key;
-    return arg !== undefined ? template.replace("{0}", arg) : template;
+        return translated;
+    }, [gameTranslate]);
 };

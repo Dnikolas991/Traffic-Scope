@@ -2,7 +2,7 @@ import React from "react";
 import { Portal } from "cs2/ui";
 import { useValue } from "cs2/api";
 import { hasStatsBinding, isActiveBinding, statsJsonBinding } from "./bindings";
-import { translate } from "./localization";
+import { useTranslate } from "./localization";
 import type { RouteStatisticsBucket, RouteStatisticsPanelPayload, RouteVisualizationKind } from "./routeStatsContracts";
 
 /** 锚点位置接口 */
@@ -72,6 +72,9 @@ export const StatsPanel = ({ anchor }: Props) => {
     const isActive = useValue(isActiveBinding);
     const hasStats = useValue(hasStatsBinding);
     const statsJson = useValue(statsJsonBinding);
+    
+    /** 获取翻译 Hook */
+    const translate = useTranslate();
 
     // 如果面板未激活或没有数据，则不渲染
     if (!isActive || !hasStats || !statsJson || !anchor) {
@@ -107,10 +110,10 @@ export const StatsPanel = ({ anchor }: Props) => {
                     top: `${anchor.y}px`,
                     left: `${anchor.x}px`,
                     pointerEvents: "auto",
-                    width: "560px",             // 略微增加宽度
+                    width: "560px",             
                     borderRadius: "28px",        
                     overflow: "hidden",
-                    background: "rgba(10, 12, 16, 0.98)", // 极深色背景，提升对比度
+                    background: "rgba(10, 12, 16, 0.98)", 
                     backdropFilter: "blur(30px)", 
                     border: "1px solid rgba(255, 255, 255, 0.18)",
                     boxShadow: "0 35px 70px rgba(0, 0, 0, 0.9)",
@@ -132,7 +135,7 @@ export const StatsPanel = ({ anchor }: Props) => {
                         letterSpacing: "1.5px",
                         textTransform: "uppercase"
                     }}>
-                        Transit Statistics
+                        {translate("stats.title.main", "Transit Statistics")}
                     </div>
                 </div>
 
@@ -163,7 +166,7 @@ export const StatsPanel = ({ anchor }: Props) => {
                                 justifyContent: "center",
                                 alignItems: "center",
                                 boxShadow: "inset 0 0 25px rgba(0,0,0,0.8)",
-                                zIndex: 10               // 确保在最上层
+                                zIndex: 10               
                             }}>
                                 {hasTraffic ? (
                                     <>
@@ -171,16 +174,16 @@ export const StatsPanel = ({ anchor }: Props) => {
                                         <div style={{ fontSize: "52px", fontWeight: 950, color: "#FFFFFF", lineHeight: 1 }}>
                                             {totalSources}
                                         </div>
-                                        {/* Total 标签 - 改为纯白色不透明文字 */}
+                                        {/* Total 标签 */}
                                         <div style={{ 
                                             fontSize: "14px",      
                                             fontWeight: 700,
-                                            color: "#FFFFFF",    // 纯白色
+                                            color: "#FFFFFF",    
                                             textTransform: "uppercase", 
                                             marginTop: "10px",
                                             letterSpacing: "2px"
                                         }}>
-                                            Total
+                                            {translate("stats.total", "Total")}
                                         </div>
                                     </>
                                 ) : (
@@ -223,17 +226,16 @@ export const StatsPanel = ({ anchor }: Props) => {
                                         textTransform: "uppercase",
                                         letterSpacing: "1px"
                                     }}>
-                                        No Traffic
+                                        {translate("stats.item.no_traffic", "No Traffic")}
                                     </div>
-                                    {/* 等待字样使用双行显示 */}
+                                    {/* 使用双行显示等待信息 */}
                                     <div style={{ 
                                         fontSize: "18px", 
                                         color: "rgba(255, 255, 255, 0.4)", 
                                         lineHeight: 1.4,
                                         fontWeight: 500
                                     }}>
-                                        Waiting for transit data<br />
-                                        to be collected...
+                                        {translate("stats.message.waiting", "Waiting for transit data to be collected...")}
                                     </div>
                                 </div>
                             )}
@@ -284,7 +286,6 @@ function normalizeKind(kind: RouteStatisticsBucket["kind"]): RouteVisualizationK
  * 构建环形图背景
  */
 function buildPieGradient(buckets: NormalizedRouteStatisticsBucket[], totalSources: number) {
-    // 无流量时显示白色圆环
     if (totalSources <= 0) return "rgba(255, 255, 255, 0.85)";
 
     let offset = 0;

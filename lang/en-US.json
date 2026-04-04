@@ -1,4 +1,5 @@
 {
+  "stats.title.main": "Transit Statistics",
   "stats.total": "Total",
   "stats.title.road": "Traffic Flow",
   "stats.title.building": "Building Traffic",
@@ -16,5 +17,6 @@
   "stats.item.pedestrians": "Pedestrians",
   "stats.item.other_vehicles": "Other Vehicles",
   "stats.item.others": "Others",
-  "stats.item.no_traffic": "No Traffic"
+  "stats.item.no_traffic": "No Traffic",
+  "stats.message.waiting": "Waiting for transit data to be collected..."
 }
