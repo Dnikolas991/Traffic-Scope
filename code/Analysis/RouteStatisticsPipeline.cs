@@ -102,21 +102,25 @@ namespace Transit_Scope.code
             AddSubAreas(selectedEntity, set);
             AddSubObjects(selectedEntity, set);
 
+            if (m_EntityManager.HasComponent<Attached>(selectedEntity))
+            {
+                Entity parent = m_EntityManager.GetComponentData<Attached>(selectedEntity).m_Parent;
+                if (parent != Entity.Null && m_EntityManager.Exists(parent))
+                {
+                    set.Add(parent);
+                    AddSubLanes(parent, set);
+                    AddSubNets(parent, set);
+                    AddSubAreas(parent, set);
+                    AddSubObjects(parent, set);
+                }
+            }
+
             if (m_EntityManager.HasBuffer<SpawnLocationElement>(selectedEntity))
             {
                 DynamicBuffer<SpawnLocationElement> spawnLocations = m_EntityManager.GetBuffer<SpawnLocationElement>(selectedEntity);
                 for (int i = 0; i < spawnLocations.Length; i++)
                 {
                     set.Add(spawnLocations[i].m_SpawnLocation);
-                }
-
-                if (m_EntityManager.HasComponent<Attached>(selectedEntity))
-                {
-                    Entity parent = m_EntityManager.GetComponentData<Attached>(selectedEntity).m_Parent;
-                    AddSubLanes(parent, set);
-                    AddSubNets(parent, set);
-                    AddSubAreas(parent, set);
-                    AddSubObjects(parent, set);
                 }
             }
 
@@ -532,6 +536,7 @@ namespace Transit_Scope.code
             for (int i = 0; i < subObjects.Length; i++)
             {
                 Entity subObject = subObjects[i].m_SubObject;
+                targetSet.Add(subObject);
                 AddSubLanes(subObject, targetSet);
                 AddSubNets(subObject, targetSet);
                 AddSubAreas(subObject, targetSet);

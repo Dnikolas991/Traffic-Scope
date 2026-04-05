@@ -77,23 +77,19 @@ namespace Transit_Scope.code
                 return Entity.Null;
             }
 
-            Entity ownerRoot = ResolveOwnerRoot(entityManager, entity);
-            if (IsBuilding(entityManager, ownerRoot))
+            Entity resolved = ResolveBuildingCandidate(entityManager, entity);
+            if (resolved != Entity.Null)
             {
-                return ownerRoot;
-            }
-
-            if (IsBuilding(entityManager, entity))
-            {
-                return entity;
+                return resolved;
             }
 
             if (entityManager.HasComponent<Game.Tools.Temp>(entity))
             {
                 Game.Tools.Temp temp = entityManager.GetComponentData<Game.Tools.Temp>(entity);
-                if (IsBuilding(entityManager, temp.m_Original))
+                resolved = ResolveBuildingCandidate(entityManager, temp.m_Original);
+                if (resolved != Entity.Null)
                 {
-                    return temp.m_Original;
+                    return resolved;
                 }
             }
 
@@ -133,6 +129,65 @@ namespace Transit_Scope.code
             }
 
             return current;
+        }
+
+        private static Entity ResolveAttachedRoot(EntityManager entityManager, Entity entity)
+        {
+            Entity current = entity;
+
+            for (int depth = 0; depth < MaxOwnerTraversalDepth; depth++)
+            {
+                if (current == Entity.Null ||
+                    !entityManager.Exists(current) ||
+                    !entityManager.HasComponent<Game.Objects.Attached>(current))
+                {
+                    break;
+                }
+
+                Entity parent = entityManager.GetComponentData<Game.Objects.Attached>(current).m_Parent;
+                if (parent == Entity.Null || !entityManager.Exists(parent))
+                {
+                    break;
+                }
+
+                current = parent;
+            }
+
+            return current;
+        }
+
+        private static Entity ResolveBuildingCandidate(EntityManager entityManager, Entity entity)
+        {
+            if (IsBuilding(entityManager, entity))
+            {
+                return entity;
+            }
+
+            Entity attachedRoot = ResolveAttachedRoot(entityManager, entity);
+            if (IsBuilding(entityManager, attachedRoot))
+            {
+                return attachedRoot;
+            }
+
+            Entity ownerRoot = ResolveOwnerRoot(entityManager, entity);
+            if (IsBuilding(entityManager, ownerRoot))
+            {
+                return ownerRoot;
+            }
+
+            Entity ownerOfAttachedRoot = ResolveOwnerRoot(entityManager, attachedRoot);
+            if (IsBuilding(entityManager, ownerOfAttachedRoot))
+            {
+                return ownerOfAttachedRoot;
+            }
+
+            Entity attachedOfOwnerRoot = ResolveAttachedRoot(entityManager, ownerRoot);
+            if (IsBuilding(entityManager, attachedOfOwnerRoot))
+            {
+                return attachedOfOwnerRoot;
+            }
+
+            return Entity.Null;
         }
     }
 }
