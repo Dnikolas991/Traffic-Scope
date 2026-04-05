@@ -29,7 +29,9 @@ namespace Transit_Scope.code
         }
 
         private ToolSystem m_GameToolSystem;
+        private TrafficRoutesSystem m_TrafficRoutesSystem;
         private State m_State = State.Default;
+        private bool m_OpenedVanillaTrafficRoutes;
 
         public Entity HoveredEntity { get; private set; } = Entity.Null;
         public SelectionKind HoveredKind { get; private set; } = SelectionKind.None;
@@ -65,6 +67,7 @@ namespace Transit_Scope.code
             base.OnCreate();
 
             m_GameToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
+            m_TrafficRoutesSystem = World.GetOrCreateSystemManaged<TrafficRoutesSystem>();
             Enabled = false;
         }
 
@@ -73,6 +76,7 @@ namespace Transit_Scope.code
             base.OnStartRunning();
 
             m_State = State.Selecting;
+            EnsureVanillaTrafficRoutesVisible();
             ResetState();
             UpdateNativeSelectionMarker();
             Logger.Info("选择模式已开启。");
@@ -83,6 +87,7 @@ namespace Transit_Scope.code
             base.OnStopRunning();
 
             m_State = State.Default;
+            RestoreVanillaTrafficRoutesVisibility();
             ResetState();
             UpdateNativeSelectionMarker();
             Logger.Info("选择模式已关闭。");
@@ -332,6 +337,38 @@ namespace Transit_Scope.code
                 SelectionKind.Building => EntityResolver.IsBuilding(EntityManager, entity),
                 _ => false
             };
+        }
+
+        private void EnsureVanillaTrafficRoutesVisible()
+        {
+            if (m_TrafficRoutesSystem == null)
+            {
+                return;
+            }
+
+            bool wasVisible = m_TrafficRoutesSystem.routesVisible;
+            m_OpenedVanillaTrafficRoutes = !wasVisible;
+
+            if (!wasVisible)
+            {
+                m_TrafficRoutesSystem.routesVisible = true;
+            }
+        }
+
+        private void RestoreVanillaTrafficRoutesVisibility()
+        {
+            if (m_TrafficRoutesSystem == null)
+            {
+                m_OpenedVanillaTrafficRoutes = false;
+                return;
+            }
+
+            if (m_OpenedVanillaTrafficRoutes)
+            {
+                m_TrafficRoutesSystem.routesVisible = false;
+            }
+
+            m_OpenedVanillaTrafficRoutes = false;
         }
     }
 }
