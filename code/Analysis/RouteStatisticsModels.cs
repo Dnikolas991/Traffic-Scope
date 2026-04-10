@@ -134,8 +134,6 @@ namespace Transit_Scope.code
     /// </summary>
     internal sealed class RouteStatisticsSnapshot
     {
-        public const int VanillaSourceLimitPerKind = 200;
-
         public RouteStatisticsSelectionContext Context { get; set; }
         public RouteStatisticsTargetSet TargetSet { get; set; }
         public List<MatchedPathSourceRecord> MatchedSources { get; } = new();

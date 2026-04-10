@@ -8,12 +8,15 @@ namespace Transit_Scope.code
     /// </summary>
     public partial class SelectionSystem : GameSystemBase
     {
+        private const int RefreshIntervalFrames = 30;
+
         private SelectionToolSystem m_ToolSystem;
         private UIBridgeSystem m_UISystem;
         private TrafficFlowSystem m_FlowSystem;
 
         private Entity m_LastAnalyzedEntity = Entity.Null;
         private SelectionToolSystem.SelectionKind m_LastAnalyzedKind = SelectionToolSystem.SelectionKind.None;
+        private int m_FramesUntilNextRefresh;
 
         protected override void OnCreate()
         {
@@ -47,11 +50,19 @@ namespace Transit_Scope.code
                 sourceEntity != m_LastAnalyzedEntity ||
                 selectedKind != m_LastAnalyzedKind;
 
+            if (!selectionChanged && m_FramesUntilNextRefresh > 0)
+            {
+                m_FramesUntilNextRefresh--;
+                m_ToolSystem.ClearNewSelectionFlag();
+                return;
+            }
+
             RouteStatisticsSnapshot snapshot = m_FlowSystem.RefreshRouteStatistics(sourceEntity, selectedKind, m_ToolSystem.SelectedIndex);
             m_ToolSystem.ClearNewSelectionFlag();
 
             m_LastAnalyzedEntity = sourceEntity;
             m_LastAnalyzedKind = selectedKind;
+            m_FramesUntilNextRefresh = RefreshIntervalFrames;
 
             Logger.Info(
                 $"[RouteStats] Selection refresh selected={selectedKind} display=#{selectedEntity.Index} source=#{sourceEntity.Index} " +
@@ -70,6 +81,7 @@ namespace Transit_Scope.code
         {
             m_LastAnalyzedEntity = Entity.Null;
             m_LastAnalyzedKind = SelectionToolSystem.SelectionKind.None;
+            m_FramesUntilNextRefresh = 0;
 
             m_FlowSystem.ClearRouteStatistics();
             m_UISystem.ClearStats();

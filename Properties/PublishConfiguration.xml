@@ -15,6 +15,8 @@ Transit Scope 是一个信息查看类模组，主要用于在游戏中快速选
 <br/>
 This mod is the spiritual successor to the original <b>Traffic Volume</b>.<br/>
 本模组是一代 <b>Traffic Volume</b> 的继任者。<br/>
+Please note: there is currently an issue where selecting large, multi-part building objects may display “No Traffic.” Please reselect the object and, whenever possible, try to select its button.<br/>
+请注意：目前存在选中大型多子物体建筑显示“无流量”的情况，请重新选择，尽量选择物体的底座<br/>
 <br/>
 The mod currently provides:<br/>
 这个模组目前提供：<br/>
@@ -62,17 +64,14 @@ In the future, I will try to implement:<br/>
 1. Building hover outlines closer to the vanilla game style<br/>
 1. 与原版相似的建筑悬停描边效果<br/>
 <br/>
-2. Smarter automatic activation of the traffic routes tool<br/>
-2. 智能开启交通路线工具<br/>
+2. An entry point next to the outside connection button<br/>
+2. 在对外连接按钮旁边添加入口<br/>
 <br/>
-3. An entry point next to the outside connection button<br/>
-3. 在对外连接按钮旁边添加入口<br/>
+3. A UI style closer to other well-known mods<br/>
+3. 与其他知名模组相似的 UI<br/>
 <br/>
-4. A UI style closer to other well-known mods<br/>
-4. 与其他知名模组相似的 UI<br/>
-<br/>
-5. Customizable item colors, fonts, sizes, and hotkeys<br/>
-5. 自定义条目颜色、字体、大小、快捷键]]>
+4. Customizable item colors, fonts, sizes, and hotkeys<br/>
+4. 自定义条目颜色、字体、大小、快捷键]]>
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.jpg" />

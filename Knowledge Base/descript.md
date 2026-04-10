@@ -164,7 +164,7 @@ Transit Scope 是一个 `Cities: Skylines II` 模组。
   - `Train`
   - `Human`
   - `Bicycle`
-- 每类保留原版等价的 `200 source` 上限
+- 每类统计不再设置 source 数量上限，所有匹配到的 source 都参与聚合
 
 ### 车辆分类规则
 

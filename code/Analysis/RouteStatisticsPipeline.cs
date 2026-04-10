@@ -361,12 +361,6 @@ namespace Transit_Scope.code
                     bucketMap.Add(source.VisualizationKind, bucket);
                 }
 
-                if (bucket.SourceCount >= RouteStatisticsSnapshot.VanillaSourceLimitPerKind)
-                {
-                    bucket.TruncatedBySourceLimit = true;
-                    continue;
-                }
-
                 bucket.SourceCount++;
 
                 (RouteVisualizationKind, ulong) lineKey = (source.VisualizationKind, source.NormalizedRouteKey);
