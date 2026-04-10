@@ -3,6 +3,7 @@ using Game.Net;
 using Game.Notifications;
 using Game.Prefabs;
 using Game.Tools;
+using System.Collections.Generic;
 using Unity.Entities;
 using Unity.Jobs;
 using UnityEngine.InputSystem;
@@ -32,6 +33,7 @@ namespace Transit_Scope.code
         private TrafficRoutesSystem m_TrafficRoutesSystem;
         private State m_State = State.Default;
         private bool m_OpenedVanillaTrafficRoutes;
+        private readonly List<Entity> m_HighlightedHoverEntities = new();
 
         public Entity HoveredEntity { get; private set; } = Entity.Null;
         public SelectionKind HoveredKind { get; private set; } = SelectionKind.None;
@@ -87,6 +89,7 @@ namespace Transit_Scope.code
             base.OnStopRunning();
 
             m_State = State.Default;
+            ClearVanillaHoverHighlight();
             RestoreVanillaTrafficRoutesVisibility();
             ResetState();
             UpdateNativeSelectionMarker();
@@ -110,6 +113,7 @@ namespace Transit_Scope.code
                 return;
             }
 
+            ClearVanillaHoverHighlight();
             ResetState();
 
             if (m_GameToolSystem.activeTool != this)
@@ -128,6 +132,7 @@ namespace Transit_Scope.code
                 return;
             }
 
+            ClearVanillaHoverHighlight();
             ResetState();
 
             if (m_GameToolSystem.activeTool == this)
@@ -227,6 +232,7 @@ namespace Transit_Scope.code
 
             HasNewSelection = false;
             UpdateHoveredTarget();
+            SyncVanillaHoverHighlight();
 
             if (SelectedEntity != Entity.Null && !EntityManager.Exists(SelectedEntity))
             {
@@ -293,6 +299,7 @@ namespace Transit_Scope.code
         private void ClearSelectionInternal()
         {
             ResetState();
+            SyncVanillaHoverHighlight();
             UpdateNativeSelectionMarker();
         }
 
@@ -327,6 +334,111 @@ namespace Transit_Scope.code
                 HoveredEntity = buildingEntity;
                 HoveredKind = SelectionKind.Building;
             }
+        }
+
+        private void SyncVanillaHoverHighlight()
+        {
+            Entity target =
+                IsSelecting &&
+                HoveredEntity != Entity.Null &&
+                HoveredKind != SelectionKind.None &&
+                EntityManager.Exists(HoveredEntity) &&
+                !HasConfirmedHoveredTarget
+                    ? HoveredEntity
+                    : Entity.Null;
+
+            List<Entity> targetEntities = null;
+            if (target != Entity.Null)
+            {
+                if (HoveredKind == SelectionKind.Building)
+                {
+                    targetEntities = EntityResolver.CollectBuildingHighlightEntities(EntityManager, target);
+                }
+                else if (HoveredKind == SelectionKind.Road)
+                {
+                    targetEntities = new List<Entity>(1) { target };
+                }
+            }
+
+            if (HaveSameEntities(m_HighlightedHoverEntities, targetEntities))
+            {
+                return;
+            }
+
+            ClearVanillaHoverHighlight();
+
+            if (targetEntities == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < targetEntities.Count; i++)
+            {
+                Entity entity = targetEntities[i];
+                if (!EntityManager.HasComponent<Highlighted>(entity))
+                {
+                    EntityManager.AddComponent<Highlighted>(entity);
+                    MarkEntityUpdated(entity);
+                }
+
+                m_HighlightedHoverEntities.Add(entity);
+            }
+        }
+
+        private void ClearVanillaHoverHighlight()
+        {
+            if (m_HighlightedHoverEntities.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < m_HighlightedHoverEntities.Count; i++)
+            {
+                Entity entity = m_HighlightedHoverEntities[i];
+                if (EntityManager.Exists(entity) && EntityManager.HasComponent<Highlighted>(entity))
+                {
+                    EntityManager.RemoveComponent<Highlighted>(entity);
+                    MarkEntityUpdated(entity);
+                }
+            }
+
+            m_HighlightedHoverEntities.Clear();
+        }
+
+        private void MarkEntityUpdated(Entity entity)
+        {
+            if (entity == Entity.Null || !EntityManager.Exists(entity))
+            {
+                return;
+            }
+
+            if (!EntityManager.HasComponent<Updated>(entity))
+            {
+                EntityManager.AddComponent<Updated>(entity);
+            }
+        }
+
+        private static bool HaveSameEntities(List<Entity> left, List<Entity> right)
+        {
+            if (right == null)
+            {
+                return left.Count == 0;
+            }
+
+            if (left.Count != right.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < left.Count; i++)
+            {
+                if (left[i] != right[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private bool IsValidSelection(Entity entity, SelectionKind kind)

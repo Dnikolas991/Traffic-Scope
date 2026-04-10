@@ -56,10 +56,6 @@ namespace Transit_Scope.code
             {
                 DrawRoadHover(overlayBuffer, hoveredEntity);
             }
-            else if (hoveredKind == SelectionToolSystem.SelectionKind.Building)
-            {
-                DrawBuildingHover(overlayBuffer, hoveredEntity);
-            }
         }
 
         private void DrawRoadHover(OverlayRenderSystem.Buffer overlayBuffer, Entity edgeEntity)
@@ -87,40 +83,6 @@ namespace Transit_Scope.code
                 Color.clear,
                 OverlayColors.RoadOutlineWidth,
                 roadWidth + OverlayColors.RoadOutlinePadding);
-        }
-
-        private void DrawBuildingHover(OverlayRenderSystem.Buffer overlayBuffer, Entity buildingEntity)
-        {
-            if (!EntityManager.HasComponent<Game.Objects.Transform>(buildingEntity) ||
-                !EntityManager.HasComponent<PrefabRef>(buildingEntity))
-            {
-                return;
-            }
-
-            Game.Objects.Transform transform = EntityManager.GetComponentData<Game.Objects.Transform>(buildingEntity);
-            PrefabRef prefabReference = EntityManager.GetComponentData<PrefabRef>(buildingEntity);
-            Entity prefabEntity = prefabReference.m_Prefab;
-
-            if (!EntityManager.HasComponent<ObjectGeometryData>(prefabEntity))
-            {
-                return;
-            }
-
-            ObjectGeometryData geometryData = EntityManager.GetComponentData<ObjectGeometryData>(prefabEntity);
-            Line3.Segment[] outlineEdges = OverlayHelpers.GetBuilding3DOutline(
-                transform,
-                geometryData.m_Bounds,
-                OverlayColors.BuildingExpand);
-
-            foreach (Line3.Segment edge in outlineEdges)
-            {
-                OverlayHelpers.DrawLine(
-                    overlayBuffer,
-                    edge,
-                    OverlayColors.MainOutline,
-                    OverlayColors.BuildingOutlineWidth,
-                    projected: false);
-            }
         }
 
         private float GetRoadVisualWidth(Entity edgeEntity)
