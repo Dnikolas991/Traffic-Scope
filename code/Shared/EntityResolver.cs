@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Entities;
 
 namespace Transit_Scope.code
@@ -106,6 +107,20 @@ namespace Transit_Scope.code
             return ResolveOwnerRoot(entityManager, entity);
         }
 
+        public static List<Entity> CollectBuildingHighlightEntities(EntityManager entityManager, Entity buildingEntity)
+        {
+            List<Entity> result = new();
+            if (buildingEntity == Entity.Null || !entityManager.Exists(buildingEntity))
+            {
+                return result;
+            }
+
+            Entity aggregateRoot = ResolveBuildingAggregateRoot(entityManager, buildingEntity);
+            HashSet<Entity> visited = new();
+            AddBuildingHighlightEntityRecursive(entityManager, aggregateRoot, visited, result);
+            return result;
+        }
+
         private static Entity ResolveOwnerRoot(EntityManager entityManager, Entity entity)
         {
             Entity current = entity;
@@ -126,6 +141,31 @@ namespace Transit_Scope.code
                 }
 
                 current = owner.m_Owner;
+            }
+
+            return current;
+        }
+
+        private static Entity ResolveTargetRoot(EntityManager entityManager, Entity entity)
+        {
+            Entity current = entity;
+
+            for (int depth = 0; depth < MaxOwnerTraversalDepth; depth++)
+            {
+                if (current == Entity.Null ||
+                    !entityManager.Exists(current) ||
+                    !entityManager.HasComponent<Game.Common.Target>(current))
+                {
+                    break;
+                }
+
+                Entity target = entityManager.GetComponentData<Game.Common.Target>(current).m_Target;
+                if (target == Entity.Null || !entityManager.Exists(target))
+                {
+                    break;
+                }
+
+                current = target;
             }
 
             return current;
@@ -175,10 +215,22 @@ namespace Transit_Scope.code
                 return ownerRoot;
             }
 
+            Entity targetRoot = ResolveTargetRoot(entityManager, entity);
+            if (IsBuilding(entityManager, targetRoot))
+            {
+                return targetRoot;
+            }
+
             Entity ownerOfAttachedRoot = ResolveOwnerRoot(entityManager, attachedRoot);
             if (IsBuilding(entityManager, ownerOfAttachedRoot))
             {
                 return ownerOfAttachedRoot;
+            }
+
+            Entity ownerOfTargetRoot = ResolveOwnerRoot(entityManager, targetRoot);
+            if (IsBuilding(entityManager, ownerOfTargetRoot))
+            {
+                return ownerOfTargetRoot;
             }
 
             Entity attachedOfOwnerRoot = ResolveAttachedRoot(entityManager, ownerRoot);
@@ -187,7 +239,94 @@ namespace Transit_Scope.code
                 return attachedOfOwnerRoot;
             }
 
+            Entity attachedOfTargetRoot = ResolveAttachedRoot(entityManager, targetRoot);
+            if (IsBuilding(entityManager, attachedOfTargetRoot))
+            {
+                return attachedOfTargetRoot;
+            }
+
             return Entity.Null;
+        }
+
+        private static Entity ResolveBuildingAggregateRoot(EntityManager entityManager, Entity entity)
+        {
+            Entity best = ResolveBuildingCandidate(entityManager, entity);
+            if (best == Entity.Null)
+            {
+                return entity;
+            }
+
+            Entity current = best;
+            for (int depth = 0; depth < MaxOwnerTraversalDepth; depth++)
+            {
+                Entity next = ResolveOwnerRoot(entityManager, current);
+                if (next != Entity.Null && next != current)
+                {
+                    Entity ownerBuilding = ResolveBuildingCandidate(entityManager, next);
+                    if (ownerBuilding != Entity.Null && ownerBuilding != current)
+                    {
+                        current = ownerBuilding;
+                        continue;
+                    }
+                }
+
+                Entity attached = ResolveAttachedRoot(entityManager, current);
+                if (attached != Entity.Null && attached != current)
+                {
+                    Entity attachedBuilding = ResolveBuildingCandidate(entityManager, attached);
+                    if (attachedBuilding != Entity.Null && attachedBuilding != current)
+                    {
+                        current = attachedBuilding;
+                        continue;
+                    }
+                }
+
+                break;
+            }
+
+            return current;
+        }
+
+        private static void AddBuildingHighlightEntityRecursive(
+            EntityManager entityManager,
+            Entity entity,
+            HashSet<Entity> visited,
+            List<Entity> result)
+        {
+            if (entity == Entity.Null || !entityManager.Exists(entity) || !visited.Add(entity))
+            {
+                return;
+            }
+
+            if (entityManager.HasComponent<Game.Prefabs.PrefabRef>(entity) &&
+                !entityManager.HasComponent<Game.Net.Edge>(entity))
+            {
+                result.Add(entity);
+            }
+
+            if (entityManager.HasBuffer<Game.Objects.SubObject>(entity))
+            {
+                DynamicBuffer<Game.Objects.SubObject> subObjects = entityManager.GetBuffer<Game.Objects.SubObject>(entity);
+                for (int i = 0; i < subObjects.Length; i++)
+                {
+                    AddBuildingHighlightEntityRecursive(entityManager, subObjects[i].m_SubObject, visited, result);
+                }
+            }
+
+            if (entityManager.HasBuffer<Game.Buildings.InstalledUpgrade>(entity))
+            {
+                DynamicBuffer<Game.Buildings.InstalledUpgrade> upgrades = entityManager.GetBuffer<Game.Buildings.InstalledUpgrade>(entity);
+                for (int i = 0; i < upgrades.Length; i++)
+                {
+                    AddBuildingHighlightEntityRecursive(entityManager, upgrades[i].m_Upgrade, visited, result);
+                }
+            }
+
+            if (entityManager.HasComponent<Game.Objects.Attachment>(entity))
+            {
+                Entity attached = entityManager.GetComponentData<Game.Objects.Attachment>(entity).m_Attached;
+                AddBuildingHighlightEntityRecursive(entityManager, attached, visited, result);
+            }
         }
     }
 }
