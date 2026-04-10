@@ -79,6 +79,17 @@ namespace Transit_Scope.code
 
         private void ClearPresentationState()
         {
+            bool alreadyCleared =
+                m_LastAnalyzedEntity == Entity.Null &&
+                m_LastAnalyzedKind == SelectionToolSystem.SelectionKind.None &&
+                m_FlowSystem.CurrentSnapshot == null &&
+                !m_UISystem.HasStats;
+
+            if (alreadyCleared)
+            {
+                return;
+            }
+
             m_LastAnalyzedEntity = Entity.Null;
             m_LastAnalyzedKind = SelectionToolSystem.SelectionKind.None;
             m_FramesUntilNextRefresh = 0;

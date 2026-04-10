@@ -1,26 +1,43 @@
-﻿using Colossal.Logging;
+using System;
+using Colossal.Logging;
 
 namespace Transit_Scope
 {
     public static class Logger
     {
-        private static ILog _log = LogManager.GetLogger(nameof(Transit_Scope));
-        //SetShowsErrorsInUI(false)就是调用error方法时在游戏中不弹出ui
+        private static readonly ILog _log = LogManager.GetLogger(nameof(Transit_Scope));
 
-        // 暴露公开的静态方法
-        public static void Info(string message) 
+        public static void Info(string message)
         {
-            _log.Info(message);
+            SafeLog(log => log.Info(message));
         }
-        
-        public static void Error(string message) 
+
+        public static void Error(string message)
         {
-            _log.Error(message);
+            SafeLog(log => log.Error(message));
         }
-        
-        public static void Warning(string message) 
+
+        public static void Warning(string message)
         {
-            _log.Warn(message);
+            SafeLog(log => log.Warn(message));
+        }
+
+        private static void SafeLog(Action<ILog> write)
+        {
+            if (write == null || _log == null)
+            {
+                return;
+            }
+
+            try
+            {
+                write(_log);
+            }
+            catch
+            {
+                // Colossal.Logging can throw inside its Unity log handler.
+                // Logging must never break the simulation update loop.
+            }
         }
     }
 }

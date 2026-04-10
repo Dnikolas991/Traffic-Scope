@@ -21,6 +21,7 @@ namespace Transit_Scope.code
         private SelectionToolSystem m_SelectionToolSystem;
 
         public bool IsActive => m_ActiveBinding.value;
+        internal bool HasStats => m_HasStatsBinding?.value ?? false;
 
         protected override void OnCreate()
         {
@@ -122,9 +123,13 @@ namespace Transit_Scope.code
         /// </summary>
         internal void ClearStats()
         {
+            if (!m_HasStatsBinding.value && string.IsNullOrEmpty(m_StatsJsonBinding.value))
+            {
+                return;
+            }
+
             m_HasStatsBinding.Update(false);
             m_StatsJsonBinding.Update(string.Empty);
-            Logger.Info("[RouteStats] ClearStats");
         }
     }
 }
