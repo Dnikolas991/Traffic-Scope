@@ -2,110 +2,270 @@
 
 ## Scope
 
-- Goal: reverse engineer the vanilla building hover highlight path for mod-compatible reproduction.
+- Goal: reverse engineer the vanilla building hover path precisely enough for a mod-safe implementation.
 - Focus:
-  - hover target detection
-  - hover state propagation
-  - rendering / outline path
-  - coverage range: whether highlight resolution expands upward or downward across related entities
+  - canonical target resolution
+  - coverage expansion
+  - helper definition structure
+  - temp/helper preview generation
+  - cleanup lifecycle
 
-## Current Conclusions
+## Conclusion Summary
 
-### Confirmed
+1. The default-tool building hover entry point is:
+   - `Game.Tools.ToolSystem::ToolUpdate()`
+   - `Game.Tools.DefaultToolSystem::OnUpdate()`
+   - `Game.Tools.DefaultToolSystem::Update(JobHandle)`
+2. `DefaultToolSystem.UpdateDefinitions(...)` refreshes building helper definitions, but does not directly render the final hover visual.
+3. Vanilla building hover first canonicalizes upward, then expands downward.
+4. `Highlighted + Updated` can only provide highlight/outline behavior on the original entity set; it does not reproduce the full vanilla building hover coverage.
+5. Recreating only the relation graph is insufficient. A vanilla-like result also depends on:
+   - the real canonicalization rules
+   - the full definition structure written by `CreateDefinitionsJob::AddEntity(...)`
+   - downstream `GenerateObjectsSystem` timing
+   - downstream `ApplyObjectsSystem` replacement and cleanup timing
+6. The safest future implementation route is still to follow the vanilla definition/temp preview lifecycle, not to keep extending manual `Highlighted` logic.
 
-- `Game.Tools.Highlighted` exists as a shared ECS tag for world highlight state.
-- `Game.Rendering.OutlinesWorldUIPass` is the vanilla outline rendering path.
-- `ToolBaseSystem.GetRaycastResult(...)` reads raycast results but does not itself write hover state.
-- `DefaultToolSystem.Update(...)` calls `UpdateDefinitions(...)` during the normal hover/update flow.
-- `CreateDefinitionsJob::AddEntity(...)` creates helper definition entities with:
-  - `CreationDefinition`
-  - `OwnerDefinition`
-  - `ObjectDefinition`
-  - `IconDefinition`
-  - sometimes `NetCourse`
-- `GenerateObjectsSystem/CreateObjectsJob::CreateObject(...)` creates helper render objects with `Game.Tools.Temp`.
-- `Temp.m_Original` points back to the original source entity.
-- `SelectTempEntity(...)` resolves from helper/temp entities back to the real selected entity, so selection resolution is separate from hover preview generation.
+## Evidence Chain
 
-### High Confidence Inference
+### A. Default-tool building hover entry path
 
-- Vanilla building hover is likely not a direct material swap on the original building entity.
-- The default tool path appears to normalize the hovered target, create helper definition entities, generate temp/helper render entities, and let rendering systems drive the final outline effect.
+Confirmed:
 
-### Open Questions
+- `Game.Tools.ToolSystem::ToolUpdate()`
+  - reads `activeTool`
+  - directly updates that tool
+- `Game.Tools.DefaultToolSystem::Update(JobHandle)`
+  - in `State.Default`, calls `ToolBaseSystem.GetRaycastResult(Entity&, RaycastHit&, bool&)`
+  - when the hit changes, calls `UpdateDefinitions(handle, entity, hit.m_CellIndex.x, float3.zero, false)`
 
-- Whether the helper/temp render entity also receives `Game.Tools.Highlighted` during ordinary building hover.
-- The exact runtime consumer of `RenderingSettingsData::m_HoveredColor`.
-- The exact meaning of some internal bit flags observed in batch/instance update code.
+Conclusion:
 
-## Coverage Range Analysis
+- ordinary building hover is driven by `DefaultToolSystem`
+- not by a separate building-specific hover system
 
-### Upward Resolution Is Confirmed
+### B. `UpdateDefinitions(...)` is definition refresh, not final rendering
 
-Selection resolution climbs upward from helper or child-like entities to the canonical target:
+Confirmed:
 
+- `Game.Tools.DefaultToolSystem::UpdateDefinitions(...)`
+  - begins with `ToolBaseSystem.DestroyDefinitions(...)`
+  - builds and schedules `CreateDefinitionsJob`
+- `ToolBaseSystem.GetDefinitionQuery()`
+  - is `CreationDefinition + Exclude<Updated>`
+- `ToolBaseSystem/DestroyDefinitionsJob::Execute(...)`
+  - destroys stale definition entities only
+
+Conclusion:
+
+- `UpdateDefinitions(...)` controls definition lifetime
+- it does not by itself guarantee final preview creation or cleanup
+
+### C. Canonical target resolution
+
+Strongest direct evidence:
+
+- `Game.Tools.DefaultToolSystem/SelectEntityJob::Execute(...)`
+
+Confirmed upward relations:
+
+- `Game.Tools.Temp.m_Original`
 - `Game.Common.Owner.m_Owner`
 - `Game.Objects.Attachment.m_Attached`
 - `Game.Common.Target.m_Target`
 
-In `DefaultToolSystem/SelectEntityJob::Execute(...)`, the logic resolves through ownership and attachment relations and then continues climbing through `Owner` multiple times when the current entity is not yet a stable top-level target such as a building or vehicle.
+Meaning:
 
-Implication:
+- raycast hits on helper entities, child fragments, icons, or attachments are normalized upward
+- vanilla prefers a more canonical building-like target before building the hover preview
 
-- If the raycast or helper path lands on a child piece, icon, attachment, or other intermediate entity, vanilla prefers to resolve upward to a more canonical parent/original entity.
+Note:
 
-### Downward Expansion Is Confirmed
+- `Game.Objects.Attached.m_Parent` exists in the object/building chain
+- but the strongest current evidence for canonical root resolution is the set above, not `Attached.m_Parent`
 
-Hover/helper coverage also expands downward from the canonical target into related child content:
+### D. Downward coverage expansion
 
-- `Game.Buildings.InstalledUpgrade.m_Upgrade`
-- `Game.Objects.Attachment.m_Attached`
-- `Game.Objects.Attached.m_Parent`
-- `Game.Objects.SubObject.m_SubObject`
+Confirmed in building/object hover flow:
 
-In `DefaultToolSystem/CreateDefinitionsJob::Execute(...)`, the system enumerates related entities and calls `AddEntity(...)` for them, including installed upgrades and attachment-related entities.
+- `Game.Objects.SubObject`
+- `Game.Buildings.InstalledUpgrade`
+- `Game.Objects.Attachment`
+- `Game.Objects.Attached`
 
-In `GenerateObjectsSystem/FillCreationListJob`, `CheckSubObjects(...)` traverses `SubObject` buffers and also checks attachment / ownership-related links while assembling the helper creation set.
+Evidence:
 
-Implication:
+- `Game.Tools.DefaultToolSystem/CreateDefinitionsJob::Execute(...)`
+  - enumerates related building/object entities
+  - invokes `AddEntity(...)` for upgrades and attachment-related entities
+- `Game.Tools.GenerateObjectsSystem/FillCreationListJob::CheckSubObjects(...)`
+  - traverses `SubObject` buffers
+  - continues checking related attachment / ownership links while assembling creation sets
 
-- After the system identifies the canonical hovered building, it fans back downward to cover upgrade pieces, attached parts, and subobjects for hover preview generation.
+Conclusion:
 
-## Working Model
+- vanilla does not stop at the canonical root
+- it fans back out into upgrades, attached parts, and subobjects for hover coverage
 
-For ordinary building hover, the most likely coverage model is:
+### E. Building/object definition richness
 
-1. Raycast hits some entity belonging to the building composition.
-2. The tool path resolves upward to the canonical building/original entity.
-3. The tool path expands downward into related upgrades / attachments / subobjects.
-4. Helper/temp render entities are generated.
-5. Rendering systems produce the final outline/highlight visual.
+Confirmed core writes in `CreateDefinitionsJob::AddEntity(...)` for object/building-like branches:
 
-This means the coverage is not purely upward or purely downward.
+- `Game.Common.Updated`
+- `Game.Tools.CreationDefinition`
+- conditional `Game.Tools.OwnerDefinition`
+- `Game.Tools.ObjectDefinition`
+- conditional `Game.Notifications.IconDefinition`
 
-It is best described as:
+Important `CreationDefinition` fields confirmed relevant:
 
-- upward for canonical target resolution
-- downward for visual coverage expansion
+- `m_Original`
+- `m_Flags`
+- `m_SubPrefab`
+- `m_Attached`
 
-## Mod Reproduction Guidance
+Important `ObjectDefinition` fields confirmed relevant:
 
-### Minimal Route
+- `m_Position`
+- `m_LocalPosition`
+- `m_Scale`
+- `m_Rotation`
+- `m_LocalRotation`
+- `m_Elevation`
+- `m_Intensity`
+- `m_ParentMesh`
+- `m_GroupIndex`
+- `m_Probability`
+- `m_PrefabSubIndex`
 
-- Perform your own hover raycast.
-- Resolve to the canonical building entity.
-- Add and remove `Game.Tools.Highlighted` on hover enter/leave.
-- Verify whether the building directly participates in the vanilla outline path.
+Supporting data sources confirmed relevant:
 
-### Vanilla-Like Route
+- `Game.Tools.LocalTransformCache`
+- `Game.Tools.EditorContainer`
+- `Game.Objects.Transform`
+- `Game.Objects.Elevation`
+- `Game.Prefabs.PrefabRef`
 
-- Resolve the hovered entity upward to the canonical building.
-- Expand the coverage set downward across related upgrades / attachments / subobjects.
-- Create helper definition entities.
-- Let vanilla-style temp/helper object generation feed the render path.
+Meaning:
 
-### Practical Takeaway
+- building preview correctness depends on more than “root + relations”
+- local transform, parent mesh, subprefab, group index, probability, scale, and intensity all matter
 
-- If you only highlight the exact hit entity, coverage will likely be too narrow.
-- If you only walk downward from the hit entity without first canonicalizing upward, you risk highlighting the wrong fragment set.
-- A robust mod implementation should first normalize upward, then expand downward.
+### F. Downstream preview generation and cleanup
+
+Confirmed downstream systems:
+
+- `Game.Tools.GenerateObjectsSystem`
+- `Game.Tools.ApplyObjectsSystem`
+
+Confirmed high-level behavior:
+
+- `GenerateObjectsSystem` consumes `CreationDefinition + Updated + Any(ObjectDefinition | NetCourse)`
+- object/building branches become temp/helper objects
+- cleanup is not handled by `DestroyDefinitions(...)` alone
+- stale definitions must fall out of the refreshed `Updated` set and then downstream systems must stop rebuilding / continue cleanup
+
+Conclusion:
+
+- residual previews, wrong coverage, or freezes can happen if only the definition stage is simulated
+- the full stale -> generate -> apply/cleanup lifecycle matters
+
+## Why Previous Mod Attempts Were Incomplete
+
+### 1. Highlighting only the building root
+
+What it solves:
+
+- only the narrowest original-entity highlight case
+
+What it misses:
+
+- canonicalization
+- downward expansion
+- helper definition richness
+- temp/helper object generation
+- cleanup lifecycle
+
+### 2. Walking `Owner / Attached / Target`
+
+What it solves:
+
+- partial canonical target normalization
+
+What it misses:
+
+- downstream coverage expansion
+- definition structure
+- generated preview objects
+
+### 3. Walking `SubObject / InstalledUpgrade / Attachment`
+
+What it solves:
+
+- a broader relation set
+
+What it misses:
+
+- actual vanilla `AddEntity(...)` data population
+- `LocalTransformCache`-derived fields
+- `CreationDefinition.m_SubPrefab`
+- `CreationDefinition.m_Attached`
+- lifecycle timing
+
+### 4. Highlighting the whole manually collected entity group
+
+What it solves:
+
+- more outline coverage on original entities
+
+What it misses:
+
+- helper/temp preview generation
+- original vanilla object-definition data
+- replacement and cleanup cadence
+
+### 5. Creating simplified helper definitions
+
+What it solves:
+
+- only the appearance of a vanilla-like entry point
+
+What it misses:
+
+- full `CreationDefinition`
+- full `ObjectDefinition`
+- conditional `IconDefinition`
+- downstream assumptions about correctly populated data
+
+This is why simplified helper-definition attempts can produce broken visuals or freeze the tool path.
+
+## Practical Guidance For Transit Scope
+
+### Stable current baseline
+
+Current stable project behavior is still the custom route:
+
+- the mod owns selection mode
+- the mod performs its own hit resolution
+- the mod expands building highlight entities upward/downward
+- the mod applies `Highlighted + Updated` to the original entity group
+
+This is stable enough to use, but it is not vanilla-equivalent.
+
+### Recommended next step
+
+If building hover is revisited later, the next implementation attempt should follow this rule:
+
+- do not continue extending only the relation-walking logic
+- do not retry simplified helper definitions
+- either:
+  - let the real vanilla tool path run end-to-end
+  - or reconstruct the full building/object definition input that downstream vanilla systems expect
+
+### Must-avoid routes
+
+- only highlighting the root building
+- only extending `Owner / Target / SubObject` relations
+- manually assuming `Highlighted` is enough
+- creating partial helper definition entities
+- bypassing cleanup timing

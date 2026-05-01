@@ -42,23 +42,12 @@ export const SelectionButton = () => {
 
     return (
         <>
-            <div
-                ref={containerRef}
-                style={{
-                    pointerEvents: "auto",
-                    margin: "4px 8px",
-                    position: "relative"
-                }}
-            >
+            <div ref={containerRef}>
                 <Button
                     variant="floating"
                     selected={isActive}
                     onSelect={handleToggle}
                     tooltipLabel="Transit Scope"
-                    style={{
-                        width: "56px",
-                        height: "56px"
-                    }}
                 >
                     <SelectionIcon active={isActive} />
                 </Button>

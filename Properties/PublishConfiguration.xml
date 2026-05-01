@@ -6,72 +6,51 @@
 	<!--Short description of the mod-->
 	<ShortDescription Value="A compact traffic inspection mod for quickly viewing traffic composition on roads, railways, metro lines, and buildings. / 一个紧凑的交通信息查看模组，可快速查看道路、铁路、地铁和建筑的交通构成。" />
 	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
-	<LongDescription><![CDATA[<b>Transit Scope</b><br/>
-<br/>
-<b>Overview</b><br/>
-<br/>
-Transit Scope is an information-inspection mod designed to help players quickly select and inspect the traffic composition of different transport systems in the game, making traffic planning easier and more intuitive.<br/>
-Transit Scope 是一个信息查看类模组，主要用于在游戏中快速选择并查看各类交通流量的占比信息，可以帮助玩家更好地规划交通。<br/>
-<br/>
-This mod is the spiritual successor to the original <b>Traffic Volume</b>.<br/>
-本模组是一代 <b>Traffic Volume</b> 的继任者。<br/>
-Please note: there is currently an issue where selecting large, multi-part building objects may display “No Traffic.” Please reselect the object and, whenever possible, try to select its button.<br/>
-请注意：目前存在选中大型多子物体建筑显示“无流量”的情况，请重新选择，尽量选择物体的底座<br/>
-<br/>
-The mod currently provides:<br/>
-这个模组目前提供：<br/>
-<br/>
-- Unified selection for roads, railways, metro lines, and buildings<br/>
-- 道路、铁路、地铁、建筑的统一选择<br/>
-<br/>
-- Visual feedback for hover highlighting and confirmed selection<br/>
-- 悬停高亮与确认选中的视觉反馈<br/>
-<br/>
-- Traffic composition analysis for selected transport networks<br/>
-- 选中交通网络后的流量构成分析<br/>
-<br/>
-- A compact in-game graphical statistics UI<br/>
-- 紧凑的游戏内图形化统计界面<br/>
-<br/>
-<b>Current Features</b><br/>
-<br/>
-- Hover highlighting for roads, railway lines, and metro lines<br/>
-- 对道路、铁路线、地铁线路提供悬停高亮<br/>
-<br/>
-- Retains the vanilla selection behavior after confirming a selection<br/>
-- 点击确认后保留原版选中表现<br/>
-<br/>
-- Clean hover outline for buildings<br/>
-- 对建筑提供简洁的悬停描边<br/>
-<br/>
-- Displays the traffic composition of selected roads or tracks with a pie chart<br/>
-- 用饼图展示所选道路或轨道的交通流量构成<br/>
-<br/>
-- Displays basic information for selected buildings in a graphical format<br/>
-- 用图形化方式展示所选建筑的基础信息<br/>
-<br/>
-<b>Future Plans</b><br/>
-<br/>
-This is my first mod, so please excuse its shortcomings. Although I am a computer science student, game engineering is not my main field, and I am not yet fully proficient with C# or Unity.<br/>
-这是我的第一个模组，有许多不足之处请见谅。尽管我是计算机科学专业的学生，但我的主科并不是游戏工程，我对于 C# 及 Unity 并不完全熟练。<br/>
-<br/>
-If you have any feedback or suggestions, feel free to contact me.<br/>
-有任何反馈和建议，欢迎与我联系。<br/>
-<br/>
-In the future, I will try to implement:<br/>
-未来会尝试实现：<br/>
-<br/>
-1. Building hover outlines closer to the vanilla game style<br/>
-1. 与原版相似的建筑悬停描边效果<br/>
-<br/>
-2. An entry point next to the outside connection button<br/>
-2. 在对外连接按钮旁边添加入口<br/>
-<br/>
-3. A UI style closer to other well-known mods<br/>
-3. 与其他知名模组相似的 UI<br/>
-<br/>
-4. Customizable item colors, fonts, sizes, and hotkeys<br/>
-4. 自定义条目颜色、字体、大小、快捷键]]>
+	<LongDescription>
+		Transit Scope
+		Transit Scope is an information-inspection mod designed to help players quickly select and inspect the traffic composition of different transport systems in the game, making traffic planning easier and more intuitive.
+		Transit Scope 是一个信息查看类模组，主要用于在游戏中快速选择并查看各类交通流量的占比信息，可以帮助玩家更好地规划交通
+		This mod is the spiritual successor to the original Traffic Volume.
+		本模组是一代 Traffic Volume 的继任者。
+		Please note: there is currently an issue where selecting large, multi-part building objects may display “No Traffic.” Please reselect the object and, whenever possible, try to select its base.
+		请注意：目前存在选中大型多子物体建筑显示“无流量”的情况，请重新选择，尽量选择物体的底座
+		The mod currently provides:
+		这个模组目前提供：
+		Unified selection for roads, railways, metro lines, and buildings
+		道路、铁路、地铁、建筑的统一选择
+		Visual feedback for hover highlighting and confirmed selection
+		悬停高亮与确认选中的视觉反馈
+		Traffic composition analysis for selected transport networks
+		选中交通网络后的流量构成分析
+		A compact in-game graphical statistics UI
+		紧凑的游戏内图形化统计界面
+		Current Features
+		Hover highlighting for roads, railway lines, and metro lines
+		对道路、铁路线、地铁线路提供悬停高亮
+		Retains the vanilla selection behavior after confirming a selection
+		点击确认后保留原版选中表现
+		Clean hover outline for buildings
+		对建筑提供简洁的悬停描边
+		Displays the traffic composition of selected roads or tracks with a pie chart
+		用饼图展示所选道路或轨道的交通流量构成
+		Displays basic information for selected buildings in a graphical format
+		用图形化方式展示所选建筑的基础信息
+		Future Plans
+		未来展望
+		This is my first mod, so please excuse its shortcomings. Although I am a computer science student, game engineering is not my main field, and I am not yet fully proficient with C# or Unity.
+		这是我的第一个模组，有许多不足之处请见谅。尽管我是计算机科学专业的学生，但我的主科并不是游戏工程，我对于 C# 及 Unity 并不完全熟练。
+		If you have any feedback or suggestions, feel free to contact me.
+		有任何反馈和建议，欢迎与我联系。
+		In the future, I will try to implement:
+		未来会尝试实现：
+		Building hover outlines closer to the vanilla game style
+		与原版相似的建筑悬停描边效果
+		An entry point next to the outside connection button
+		在对外连接按钮旁边添加入口
+		A UI style closer to other well-known mods
+		与其他知名模组相似的 UI
+		Customizable item colors, fonts, sizes, and hotkeys
+		自定义条目颜色、字体、大小、快捷键
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.jpg" />
@@ -84,7 +63,7 @@ In the future, I will try to implement:<br/>
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/transit-scope.1915800" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.3" />
+	<ModVersion Value="1.5" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.5.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -92,7 +71,7 @@ In the future, I will try to implement:<br/>
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
-	<ChangeLog Value="V1.3 Smarter automatic activation of the traffic routes tool implemented, build selection bug fixed" />
+	<ChangeLog Value="V1.4 Vanilla-like building hover effects, bug fixes" />
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/Dnikolas991/Traffic-Scope" />
 	<!--Supported values Public, Private, Unlisted-->
